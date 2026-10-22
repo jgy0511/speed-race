@@ -1,0 +1,2260 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>정자 레이스 - 2D 추첨 게임 (최종 결투 & 난이도 함정 모드)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css" rel="stylesheet">
+    <style>
+        * {
+            user-select: none;
+            -webkit-user-select: none;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Pretendard', 'Malgun Gothic', 'Apple SD Gothic Neo', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+            background-color: #030712;
+            color: #ffffff;
+            overflow: hidden;
+        }
+
+        textarea, input { user-select: text; -webkit-user-select: text; }
+
+        .neon-glow {
+            box-shadow: 0 0 30px rgba(244, 63, 94, 0.5), inset 0 0 15px rgba(244, 63, 94, 0.2);
+        }
+
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.72);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+        }
+
+        @keyframes eventBannerPop {
+            0% { transform: translate(-50%, -100%) scale(0.8); opacity: 0; }
+            20% { transform: translate(-50%, 0) scale(1.05); opacity: 1; }
+            80% { transform: translate(-50%, 0) scale(1); opacity: 1; }
+            100% { transform: translate(-50%, -120%) scale(0.9); opacity: 0; }
+        }
+        .animate-event-banner {
+            animation: eventBannerPop 2.2s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+
+        button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.8); }
+        ::-webkit-scrollbar-thumb { background: #f43f5e; border-radius: 3px; }
+    </style>
+</head>
+<body class="h-screen w-screen flex flex-col justify-between overflow-hidden bg-slate-950">
+
+    <header class="w-full px-6 py-3 bg-slate-900/90 border-b border-slate-800 flex justify-between items-center z-20 backdrop-blur-md">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-rose-500 via-amber-500 to-cyan-400 p-0.5 shadow-lg">
+                <div class="w-full h-full bg-slate-950 rounded-[14px] flex items-center justify-center text-rose-400">
+                    <i class="fa-solid fa-microscope text-xl"></i>
+                </div>
+            </div>
+            <div>
+                <h1 class="text-xl font-extrabold tracking-tight bg-gradient-to-r from-rose-400 via-amber-300 to-cyan-400 bg-clip-text text-transparent">
+                    정자 레이스 <span class="text-xs px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 font-bold border border-rose-500/30">⚔️ TOP 3 난자 결투 모드</span>
+                </h1>
+                <p class="text-xs text-slate-400">개별 유기적 수영, 돌발 핸디캡 이벤트, 상위 3마리의 난자 입구 최종 배틀!</p>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-3">
+            <button id="btn-sound-toggle" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 flex items-center gap-2 text-xs font-bold transition-all">
+                <i id="sound-icon" class="fa-solid fa-volume-high text-cyan-400"></i>
+                <span id="sound-text">사운드 ON</span>
+            </button>
+            <button id="btn-open-settings" class="px-4 py-2 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 flex items-center gap-2 text-xs font-bold transition-all">
+                <i class="fa-solid fa-sliders"></i>
+                <span>N 설정 변경</span>
+            </button>
+            <button id="btn-open-rules" class="px-4 py-2 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/30 flex items-center gap-2 text-xs font-bold transition-all">
+                <i class="fa-solid fa-circle-question"></i>
+                <span>규칙 설명</span>
+            </button>
+        </div>
+    </header>
+
+    <main class="relative flex-1 w-full h-full overflow-hidden flex items-center justify-center bg-slate-950">
+
+        <!-- Main Race Canvas -->
+        <canvas id="raceCanvas" class="absolute inset-0 block z-0"></canvas>
+
+        <!-- EVENT NOTIFICATION BANNER OVERLAY -->
+        <div id="event-banner" class="hidden absolute top-20 left-1/2 -translate-x-1/2 z-30 pointer-events-none glass-panel px-6 py-3 rounded-2xl border-2 border-amber-400/80 shadow-2xl items-center gap-3">
+            <span id="event-icon" class="text-3xl animate-bounce">⚡</span>
+            <div>
+                <div id="event-title" class="text-amber-300 font-black text-base tracking-wider uppercase">돌발 이벤트!</div>
+                <div id="event-desc" class="text-slate-100 text-xs font-extrabold">후발 정자 무작위 스퍼트 가속!</div>
+            </div>
+        </div>
+
+        <div class="absolute top-4 left-6 right-6 flex justify-between items-start pointer-events-none z-10">
+            <!-- Race Progress Bar & Leader Info -->
+            <div class="glass-panel px-5 py-3 rounded-2xl flex items-center gap-4 text-xs font-bold pointer-events-auto shadow-2xl">
+                <div class="flex items-center gap-2 text-amber-400">
+                    <i class="fa-solid fa-crown text-base"></i>
+                    <span class="text-slate-400">선두:</span>
+                    <span id="hud-leader-name" class="text-rose-400 text-base font-black px-2.5 py-0.5 rounded-lg bg-rose-500/20 border border-rose-500/30">-</span>
+                </div>
+                <div class="w-px h-5 bg-slate-700"></div>
+                <div class="flex flex-col gap-1 w-36">
+                    <div class="flex justify-between text-[11px] text-slate-400">
+                        <span>전체 진행률</span>
+                        <span id="hud-progress-text" class="text-cyan-400 font-extrabold">0%</span>
+                    </div>
+                    <div class="w-full h-2 bg-slate-800 rounded-full overflow-hidden border border-slate-700">
+                        <div id="hud-progress-bar" class="h-full bg-gradient-to-r from-rose-500 to-cyan-400 w-0 transition-all duration-150"></div>
+                    </div>
+                </div>
+                <div class="w-px h-5 bg-slate-700"></div>
+                <div class="text-slate-300">
+                    생존: <span id="hud-alive-count" class="text-emerald-400 font-black text-sm">20</span> / <span id="hud-count" class="text-cyan-400 font-black text-sm">20</span>
+                </div>
+            </div>
+
+            <!-- Speed & Skip Controls -->
+            <div class="glass-panel p-1.5 rounded-2xl flex items-center gap-1.5 pointer-events-auto shadow-2xl border border-slate-800">
+                <button id="btn-speed-1" class="px-3 py-1.5 rounded-xl bg-rose-500 text-white font-black text-xs transition-all">1x</button>
+                <button id="btn-speed-2" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-black text-xs transition-all">2x</button>
+                <button id="btn-speed-4" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-black text-xs transition-all">4x</button>
+                <div class="w-px h-4 bg-slate-700 mx-0.5"></div>
+                <button id="btn-skip-race" class="px-3.5 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 font-black text-xs transition-all flex items-center gap-1.5">
+                    <i class="fa-solid fa-forward-fast"></i>
+                    <span>결과 즉시보기</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- TOP 3 BATTLE HUD OVERLAY -->
+        <div id="battle-hud-overlay" class="hidden absolute top-20 left-1/2 -translate-x-1/2 z-20 pointer-events-none glass-panel px-6 py-3 rounded-2xl border-2 border-rose-500/80 shadow-2xl flex items-center gap-6">
+            <div class="text-rose-400 font-black text-xs uppercase tracking-widest flex items-center gap-2">
+                <span class="text-lg animate-pulse">⚔️</span> TOP 3 FINAL BATTLE
+            </div>
+            <div id="battle-hp-bars" class="flex items-center gap-4"></div>
+        </div>
+
+        <!-- BOTTOM MAIN ACTION BUTTONS -->
+        <div class="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-3 pointer-events-auto opacity-80 hover:opacity-100 transition-opacity">
+            <button id="btn-start-race" class="px-8 py-2.5 rounded-2xl bg-gradient-to-r from-rose-500 via-amber-500 to-pink-500 hover:brightness-110 active:scale-95 text-white text-base font-black tracking-wider shadow-2xl flex items-center gap-3 border border-rose-300/40 transition-all neon-glow">
+                <i class="fa-solid fa-play text-xl"></i>
+                <span>레이스 출발!</span>
+            </button>
+            <button id="btn-reset-race" class="px-4 py-2.5 rounded-2xl bg-slate-900/80 hover:bg-slate-800 active:scale-95 text-slate-300 hover:text-white border border-slate-700 text-sm font-bold shadow-xl transition-all">
+                <i class="fa-solid fa-rotate-right mr-1"></i> 위치 및 지형 재정렬
+            </button>
+        </div>
+
+    </main>
+
+    <!-- SETTINGS MODAL -->
+    <div id="modal-settings" class="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-xl flex items-center justify-center p-4 transition-all duration-300 opacity-100 pointer-events-auto">
+        <div class="w-full max-w-lg max-h-[94vh] overflow-y-auto bg-slate-900 border-2 border-rose-500/60 rounded-3xl p-7 shadow-2xl flex flex-col gap-6 relative neon-glow">
+            <button id="btn-close-settings" class="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-black border border-slate-700" title="닫기">✕</button>
+
+            <div class="flex items-center gap-3 border-b border-slate-800 pb-4 pr-8">
+                <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-rose-500 to-amber-400 flex items-center justify-center text-white text-2xl shadow-lg">
+                    <i class="fa-solid fa-users-gear"></i>
+                </div>
+                <div>
+                    <h3 class="text-xl font-black text-white">시작 전 정자 수 (N) 설정</h3>
+                    <p class="text-xs text-rose-300 font-semibold">게임 시작 전 참가할 정자 수 N을 먼저 설정해주세요.</p>
+                </div>
+            </div>
+
+            <div class="space-y-5">
+                <div class="bg-slate-950 p-5 rounded-2xl border-2 border-rose-500/80 shadow-inner text-center">
+                    <label class="block text-sm font-extrabold text-amber-300 mb-2 uppercase tracking-wider">
+                        🎯 참가 정자 수 (N: 2 ~ 100)
+                    </label>
+                    <div class="flex items-center justify-center gap-3 my-2">
+                        <button id="btn-n-minus" class="w-12 h-12 rounded-2xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-white font-black text-2xl border border-slate-700 shadow-md transition-all">-</button>
+                        <input id="input-n-count" type="number" min="2" max="100" value="20" class="w-36 py-2 bg-slate-900 border-2 border-rose-400 rounded-2xl text-center font-black text-rose-400 text-3xl focus:outline-none focus:ring-4 focus:ring-rose-500/30 shadow-lg">
+                        <button id="btn-n-plus" class="w-12 h-12 rounded-2xl bg-slate-800 hover:bg-slate-700 active:scale-95 text-white font-black text-2xl border border-slate-700 shadow-md transition-all">+</button>
+                    </div>
+
+                    <div class="grid grid-cols-6 gap-2 mt-4">
+                        <button class="btn-preset-n py-2.5 rounded-xl bg-slate-800 hover:bg-rose-600 text-xs font-black text-slate-200 border border-slate-700 transition-all" data-n="5">5마리</button>
+                        <button class="btn-preset-n py-2.5 rounded-xl bg-slate-800 hover:bg-rose-600 text-xs font-black text-slate-200 border border-slate-700 transition-all" data-n="10">10마리</button>
+                        <button class="btn-preset-n py-2.5 rounded-xl bg-slate-800 hover:bg-rose-600 text-xs font-black text-slate-200 border border-slate-700 transition-all" data-n="20">20마리</button>
+                        <button class="btn-preset-n py-2.5 rounded-xl bg-slate-800 hover:bg-rose-600 text-xs font-black text-slate-200 border border-slate-700 transition-all" data-n="30">30마리</button>
+                        <button class="btn-preset-n py-2.5 rounded-xl bg-slate-800 hover:bg-rose-600 text-xs font-black text-slate-200 border border-slate-700 transition-all" data-n="50">50마리</button>
+                        <button class="btn-preset-n py-2.5 rounded-xl bg-slate-800 hover:bg-rose-600 text-xs font-black text-slate-200 border border-slate-700 transition-all" data-n="100">100마리</button>
+                    </div>
+                </div>
+
+                <div class="bg-slate-950 p-4 rounded-2xl border border-slate-800 flex items-center justify-between">
+                    <div>
+                        <div class="text-sm font-extrabold text-amber-400 flex items-center gap-2">
+                            <span class="text-base">🐢</span> 꼴찌(꼴등) 특별 공개 모드
+                        </div>
+                        <p class="text-[11px] text-slate-400 mt-0.5">레이스 종료 시 생존 정자 중 제일 마지막 정자를 발표합니다.</p>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="toggle-show-loser" class="sr-only peer" checked>
+                        <div class="w-12 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
+                    </label>
+                </div>
+
+                <div>
+                    <div class="flex justify-between items-center mb-1.5">
+                        <label class="block text-xs font-semibold text-slate-400">
+                            이름 별칭 지정 (선택: 줄바꿈으로 입력 시 1번~N번 매핑)
+                        </label>
+                        <button id="btn-clear-names" class="text-[11px] text-slate-500 hover:text-slate-300 underline">초기화</button>
+                    </div>
+                    <textarea id="input-names" rows="3" class="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3 text-xs text-slate-200 focus:outline-none focus:border-rose-500/50 resize-none font-mono" placeholder="비워두면 1번, 2번... 번호로 표기됩니다.&#10;이름 수가 N보다 많으면 N이 자동으로 늘어납니다."></textarea>
+                </div>
+            </div>
+
+            <button id="btn-apply-settings" class="w-full py-4 rounded-2xl bg-gradient-to-r from-rose-500 via-pink-500 to-amber-500 text-white font-black text-lg shadow-xl hover:brightness-110 active:scale-95 transition-all border border-rose-300/40">
+                설정 완료 및 레이스 시작!
+            </button>
+        </div>
+    </div>
+
+    <!-- RULES MODAL -->
+    <div id="modal-rules" class="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-xl flex items-center justify-center p-4 transition-all duration-300 opacity-0 pointer-events-none">
+        <div class="w-full max-w-2xl max-h-[92vh] overflow-y-auto bg-slate-900 border-2 border-cyan-500/50 rounded-3xl p-6 shadow-2xl relative">
+            <button id="btn-close-rules" class="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-black border border-slate-700" title="닫기">✕</button>
+
+            <div class="flex items-center gap-3 border-b border-slate-800 pb-4 pr-8 mb-4">
+                <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-cyan-500 to-sky-400 flex items-center justify-center text-white text-2xl shadow-lg">📖</div>
+                <div>
+                    <h3 class="text-xl font-black text-white">게임 규칙 한눈에 보기</h3>
+                    <p class="text-xs text-cyan-300 font-semibold">규칙을 보는 동안 레이스는 잠시 멈춥니다.</p>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs text-slate-300 leading-relaxed">
+
+                <section class="p-4 rounded-2xl bg-slate-950 border border-slate-800 md:col-span-2">
+                    <h4 class="text-sm font-black text-amber-300 mb-1.5">🎯 목표</h4>
+                    <ul class="space-y-1 list-disc list-inside">
+                        <li>정자 N마리가 오른쪽 끝의 <b class="text-rose-300">난자</b>를 향해 달립니다.</li>
+                        <li>난자에 가장 먼저 닿는 <b class="text-rose-300">1마리가 당첨(1등)</b>! 꼴찌 모드를 켜면 살아남은 정자 중 가장 뒤처진 정자(꼴찌)도 발표합니다.</li>
+                    </ul>
+                </section>
+
+                <section class="p-4 rounded-2xl bg-slate-950 border border-slate-800">
+                    <h4 class="text-sm font-black text-amber-300 mb-1.5">🌊 지형</h4>
+                    <ul class="space-y-1">
+                        <li>🪚 <b>톱날</b>: 닿으면 즉시 탈락</li>
+                        <li>🪨 <b>바위</b>: 부딪히면 튕겨 나감</li>
+                        <li>🧪 <b>점액 지대</b>: 속도 -50%</li>
+                        <li>⚡ <b>가속 부스터</b>: 속도 +85%</li>
+                        <li>↑↓ <b>수류</b>: 위·아래로 밀려남</li>
+                    </ul>
+                </section>
+
+                <section class="p-4 rounded-2xl bg-slate-950 border border-slate-800">
+                    <h4 class="text-sm font-black text-amber-300 mb-1.5">🎲 돌발 이벤트</h4>
+                    <p class="mb-1">레이스 중 몇 번, 약 3.5초 동안 랜덤으로 발생해요. 뒤처져도 역전할 수 있습니다!</p>
+                    <ul class="space-y-1">
+                        <li>⚡ <b>후발 스퍼트</b>: 뒤처진 정자 위주로 무작위 가속</li>
+                        <li>🌊 <b>선두권 역류</b>: 상위 20% 속도 -15%</li>
+                        <li>🔥 <b>하위권 대추격</b>: 하위 20% 가속</li>
+                    </ul>
+                </section>
+
+                <section class="p-4 rounded-2xl bg-slate-950 border border-purple-500/30">
+                    <h4 class="text-sm font-black text-purple-300 mb-1.5">🔮 아이템 (원거리 공격)</h4>
+                    <ul class="space-y-1">
+                        <li>트랙 위 빛나는 구슬을 지나가면 아이템을 줍습니다 (최대 1개 보유).</li>
+                        <li>레이스 중에도, 최종 결투 중에도 앞쪽 가까이 상대가 들어오면 <b class="text-purple-300">자동으로 발사</b>!</li>
+                        <li>레이스 중 맞으면 잠깐 추진력을 잃고 밀려나고, 결투 중 맞으면 데미지를 입습니다.</li>
+                        <li>아이템을 든 채 <b class="text-rose-300">톱날에 부딪히면</b> 아이템이 사라집니다.</li>
+                    </ul>
+                </section>
+
+                <section class="p-4 rounded-2xl bg-slate-950 border border-amber-500/30">
+                    <h4 class="text-sm font-black text-yellow-300 mb-1.5">🌟 황금 정자</h4>
+                    <p>톱날에 죽은 정자는 <b class="text-yellow-300"><span data-rule="golden-chance"></span> 확률</b>로 황금 정자로 부활!
+                    <b><span data-rule="golden-sec"></span>초 동안</b> 톱날·바위를 통과하고 속도가 <b><span data-rule="golden-mult"></span>배</b>가 됩니다.</p>
+                </section>
+
+                <section class="p-4 rounded-2xl bg-slate-950 border border-slate-800">
+                    <h4 class="text-sm font-black text-amber-300 mb-1.5">🛟 안전장치</h4>
+                    <ul class="space-y-1">
+                        <li><b>끼임 탈출</b>: <span data-rule="stuck-sec"></span>초 동안 거의 못 움직이면 <span data-rule="ghost-sec"></span>초간 바위를 통과합니다(반투명해져요).</li>
+                        <li><b>전원 탈락 방지</b>: 마지막 한 마리가 톱날에 죽어도 보호막을 두르고 부활합니다.</li>
+                    </ul>
+                </section>
+
+                <section class="p-4 rounded-2xl bg-slate-950 border border-rose-500/30 md:col-span-2">
+                    <h4 class="text-sm font-black text-rose-300 mb-1.5">⚔️ 최종 결투 TOP 3</h4>
+                    <ul class="space-y-1 list-disc list-inside">
+                        <li>선두가 난자 근처에 오면 <b>상위 3마리</b>가 난자 앞에서 결투를 벌입니다. (남은 정자는 그 자리에서 멈춤)</li>
+                        <li>체력은 150. 부딪힐 때마다 데미지를 입고, <b class="text-amber-300">치명타 25%</b>(큰 데미지),
+                            <b class="text-rose-300">MEGA HIT <span data-rule="mega-chance"></span></b>는 데미지가 <b><span data-rule="mega-mult"></span>배</b>!</li>
+                        <li>체력이 0이 되면 KO. <b>마지막까지 남은 1마리</b>가 난자로 돌진해 우승합니다.</li>
+                        <li>살아남은 정자가 1마리뿐이면 결투 없이 바로 난자로 돌진해요.</li>
+                    </ul>
+                </section>
+
+                <section class="p-4 rounded-2xl bg-slate-950 border border-slate-800">
+                    <h4 class="text-sm font-black text-amber-300 mb-1.5">🏅 순위 기준</h4>
+                    <ol class="space-y-1 list-decimal list-inside">
+                        <li>우승자</li>
+                        <li>결투에서 늦게 진 순</li>
+                        <li>살아남은 정자 (더 멀리 간 순)</li>
+                        <li>톱날 탈락자 (늦게 죽은 순)</li>
+                    </ol>
+                </section>
+
+                <section class="p-4 rounded-2xl bg-slate-950 border border-slate-800">
+                    <h4 class="text-sm font-black text-amber-300 mb-1.5">🎮 조작 &amp; 공정성</h4>
+                    <ul class="space-y-1">
+                        <li><b>1x / 2x / 4x</b>: 진행 속도 조절</li>
+                        <li><b>결과 즉시보기</b>: 과정을 건너뛰고 결과 확인</li>
+                        <li><b>위치 및 지형 재정렬</b>: 새 지형으로 다시 배치</li>
+                        <li>⚖️ 출발 위치와 능력치는 <b>매번 무작위</b>라서 번호·순서에 따른 유불리가 없어요.</li>
+                    </ul>
+                </section>
+            </div>
+
+            <button id="btn-rules-ok" class="w-full mt-4 py-3.5 rounded-2xl bg-gradient-to-r from-cyan-500 to-sky-500 text-white font-black text-sm shadow-lg hover:brightness-110 active:scale-95 transition-all">
+                확인했어요!
+            </button>
+        </div>
+    </div>
+
+    <!-- RESULT MODAL -->
+    <div id="modal-result" class="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-xl flex items-center justify-center p-4 transition-all duration-500 opacity-0 pointer-events-none scale-95">
+        <div class="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl flex flex-col items-center text-center relative overflow-hidden">
+            <div class="absolute -top-20 left-1/2 -translate-x-1/2 w-48 h-48 bg-rose-500/30 rounded-full blur-3xl pointer-events-none"></div>
+
+            <div class="w-20 h-20 rounded-full bg-gradient-to-tr from-rose-500 to-amber-400 p-1 mb-2 shadow-2xl animate-bounce">
+                <div class="w-full h-full bg-slate-950 rounded-full flex items-center justify-center text-amber-400 text-3xl">
+                    <i class="fa-solid fa-trophy"></i>
+                </div>
+            </div>
+
+            <h2 class="text-2xl font-black text-white mb-0.5 tracking-tight">수정 성공! 레이스 최종 결과</h2>
+            <p id="result-subtitle" class="text-xs text-rose-400 font-semibold mb-4">톱날과 최종 결투를 뚫고 생존한 승리자</p>
+
+            <div class="w-full grid grid-cols-1 gap-2.5 mb-4">
+                <div class="p-3.5 rounded-2xl bg-gradient-to-r from-rose-500/20 to-pink-500/10 border border-rose-500/40 flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <span class="text-2xl">🥇</span>
+                        <div class="text-left">
+                            <span class="text-[10px] font-black text-rose-400 uppercase tracking-widest block">1등 수정 성공!</span>
+                            <span id="winner-display-name" class="text-base font-black text-white">-</span>
+                        </div>
+                    </div>
+                    <span class="px-3 py-1 rounded-full bg-rose-500 text-white font-black text-xs shadow-lg">당첨!</span>
+                </div>
+
+                <div id="loser-card-box" class="p-3.5 rounded-2xl bg-gradient-to-r from-amber-500/20 to-orange-500/10 border border-amber-500/40 flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <span class="text-2xl">🐢</span>
+                        <div class="text-left">
+                            <span class="text-[10px] font-black text-amber-400 uppercase tracking-widest block">최후의 생존 거북이 (꼴찌)</span>
+                            <span id="loser-display-name" class="text-base font-black text-amber-200">-</span>
+                        </div>
+                    </div>
+                    <span class="px-3 py-1 rounded-full bg-amber-500 text-black font-black text-xs shadow-lg">꼴찌!</span>
+                </div>
+            </div>
+
+            <div class="w-full bg-slate-950 rounded-2xl p-3 border border-slate-800 mb-5 flex flex-col gap-2 max-h-48 overflow-y-auto">
+                <div class="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-0.5 flex justify-between px-2">
+                    <span>순위 / 번호</span>
+                    <span>상태 / 기록</span>
+                </div>
+                <div id="result-list" class="flex flex-col gap-1.5"></div>
+            </div>
+
+            <div class="w-full grid grid-cols-2 gap-3">
+                <button id="btn-result-rematch" class="py-3.5 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-sm border border-slate-700 transition-all">
+                    <i class="fa-solid fa-rotate-right mr-1"></i> 다시 레이스
+                </button>
+                <button id="btn-result-close" class="py-3.5 rounded-2xl bg-gradient-to-r from-rose-500 to-amber-500 text-white font-bold text-sm shadow-lg hover:brightness-110 transition-all">
+                    확인
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ------------------------------------------------------------------
+        // 유틸
+        // ------------------------------------------------------------------
+        const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+        const esc = (s) => String(s).replace(/[&<>"']/g, c => (
+            { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+        ));
+        const STEP_MS = 1000 / 60; // 물리 연산은 고정 60스텝/초
+        const STUCK_STEPS = 180;    // 3초 (60스텝/초) 동안
+        const STUCK_DISTANCE = 80;  // 이 거리 이상 못 움직였으면 '끼임'으로 판단
+        const BATTLE_MEGA_CHANCE = 0.15; // 최종 결투에서 데미지 폭발이 터질 확률
+        const BATTLE_MEGA_MULT = 2.5;    // 폭발 시 데미지 배율
+        const GOLDEN_CHANCE = 0.10;      // 톱날에 죽은 정자가 황금 정자로 부활할 확률
+        const GOLDEN_STEPS = 300;        // 황금 정자 효과 지속 시간 (5초 = 300스텝)
+        const GOLDEN_SPEED_MULT = 1.5;   // 황금 정자 속도 배율
+        const GHOST_STEPS = 90;     // 벽을 통과하는 시간 1.5초
+        const ITEM_MAGNET_RANGE = 150;       // 이 거리 안에 들어오면 아이템 쪽으로 끌려감(자석 효과)
+        const ITEM_MAGNET_FORCE = 1.3;       // 자석 효과의 세기
+        const ITEM_PROJECTILE_SPEED = 15;    // 발사체 이동 속도
+        const ITEM_PROJECTILE_LIFE = 36;     // 발사체 수명(스텝) - 다 날아가면 빗나간 것으로 사라짐
+        const ITEM_SALVO_COUNT = 3;          // 한 번에 쏘는 발사체 개수
+        const ITEM_SALVO_COOLDOWN_MIN = 70;  // 다음 발사까지 최소 대기(약 1.2초)
+        const ITEM_SALVO_COOLDOWN_JITTER = 40; // 대기 시간에 더해지는 무작위 값
+        const ITEM_RESPAWN_STEPS = 480;      // 아이템을 주운 자리에 다시 나타나기까지(8초)
+        const ITEM_SAVE_STEPS = 90;          // 아이템 덕분에 톱날에서 살아남은 뒤 벽을 통과하는 시간(1.5초)
+        const ITEM_STUN_STEPS = 60;          // 레이스 중 맞았을 때 추진력을 잃는 시간(1초)
+        const ITEM_BATTLE_DMG_MIN = 14;      // 최종 결투에서 원거리 공격 데미지 최소 (여러 발 중 일부만 맞으므로 기존보다 낮춤)
+        const ITEM_BATTLE_DMG_MAX = 24;      // 최종 결투에서 원거리 공격 데미지 최대
+        const MIN_WORLD_H = 1000;   // 레이스 필드의 최소 세로 크기 (화면이 작으면 축소해서 맞춤)
+
+        // ------------------------------------------------------------------
+        // 사운드
+        // ------------------------------------------------------------------
+        class SoundManager {
+            constructor() {
+                this.enabled = true;
+                this.suppress = 0;   // 0보다 크면 무음 (결과 즉시보기 시뮬레이션 중)
+                this.ctx = null;
+                this.last = {};
+            }
+
+            init() {
+                if (!this.ctx) {
+                    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                    if (AudioCtx) this.ctx = new AudioCtx();
+                }
+                if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
+            }
+
+            canPlay(key, gapMs = 0) {
+                if (!this.enabled || this.suppress > 0) return false;
+                this.init();
+                if (!this.ctx) return false;
+                const now = performance.now();
+                if (gapMs && this.last[key] && now - this.last[key] < gapMs) return false;
+                this.last[key] = now;
+                return true;
+            }
+
+            blip({ type = 'sine', f0, f1, dur, vol = 0.2, delay = 0 }) {
+                const t = this.ctx.currentTime + delay;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = type;
+                osc.frequency.setValueAtTime(f0, t);
+                if (f1 && f1 !== f0) osc.frequency.exponentialRampToValueAtTime(f1, t + dur);
+                gain.gain.setValueAtTime(vol, t);
+                gain.gain.exponentialRampToValueAtTime(0.01, t + dur);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start(t);
+                osc.stop(t + dur);
+            }
+
+            playStartWhistle()   { if (this.canPlay('start'))  this.blip({ f0: 800, f1: 1600, dur: 0.3 }); }
+            playBounceSound()    { if (this.canPlay('bounce', 90))  this.blip({ type: 'triangle', f0: 150, f1: 60, dur: 0.12, vol: 0.25 }); }
+            playSawSplatSound()  { if (this.canPlay('saw', 60))     this.blip({ type: 'sawtooth', f0: 300, f1: 80, dur: 0.2, vol: 0.3 }); }
+            playSlimeSound()     { if (this.canPlay('slime', 300))  this.blip({ f0: 200, f1: 100, dur: 0.15, vol: 0.15 }); }
+            playBoostSound()     { if (this.canPlay('boost', 300))  this.blip({ f0: 300, f1: 800, dur: 0.25 }); }
+            playClashSound()     { if (this.canPlay('clash', 60))   this.blip({ type: 'square', f0: 400, f1: 100, dur: 0.1 }); }
+            playKOSound()        { if (this.canPlay('ko'))          this.blip({ type: 'sawtooth', f0: 250, f1: 50, dur: 0.4, vol: 0.3 }); }
+            playEggPenetrationSound() { if (this.canPlay('egg'))    this.blip({ f0: 523.25, f1: 1046.5, dur: 0.4, vol: 0.35 }); }
+            playReviveShieldSound()   { if (this.canPlay('revive')) this.blip({ f0: 400, f1: 900, dur: 0.3 }); }
+            playItemPickupSound() {
+                if (!this.canPlay('itemget')) return;
+                this.blip({ type: 'sine', f0: 660, f1: 990, dur: 0.12, vol: 0.2 });
+            }
+            playItemShotSound() {
+                if (!this.canPlay('itemshot', 60)) return;
+                this.blip({ type: 'sawtooth', f0: 500, f1: 1200, dur: 0.14, vol: 0.22 });
+            }
+            playItemHitSound() {
+                if (!this.canPlay('itemhit', 60)) return;
+                this.blip({ type: 'square', f0: 700, f1: 200, dur: 0.15, vol: 0.25 });
+            }
+            playGoldenSound() {
+                if (!this.canPlay('golden')) return;
+                [784, 987.77, 1174.66, 1567.98].forEach((f, i) => {
+                    this.blip({ type: 'triangle', f0: f, dur: 0.22, vol: 0.22, delay: i * 0.07 });
+                });
+            }
+            playVictoryFanfare() {
+                if (!this.canPlay('fanfare')) return;
+                [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => {
+                    this.blip({ type: 'triangle', f0: f, dur: 0.3, vol: 0.25, delay: i * 0.12 });
+                });
+            }
+        }
+        const sound = new SoundManager();
+
+        // ------------------------------------------------------------------
+        // 정자(참가자)
+        // ------------------------------------------------------------------
+        class SpermSwimmer {
+            constructor(num, customLabel, scale = 1) {
+                this.number = num;
+                this.label = customLabel || `${num}번`;
+                this.baseScale = scale;
+                this.scale = scale;
+                this.headRadius = 14 * scale;
+                this.lastSlimeTime = 0;
+                this.lastBoostTime = 0;
+
+                const hue = (num * 137.5) % 360;
+                this.color = `hsl(${hue}, 90%, 65%)`;
+
+                this.reset(0);
+            }
+
+            reset(startY) {
+                this.x = 80 + Math.random() * 40;
+                this.y = startY;
+                this.vx = 0;
+                this.vy = 0;
+
+                // 매 레이스마다 능력치를 새로 뽑아 재대결 시 특정 참가자가 계속 유리해지지 않도록 함
+                this.baseSpeed = 1.8 + Math.random() * 0.7;
+                this.tailSpeed = 0.25 + Math.random() * 0.1;
+                this.tailPhase = Math.random() * Math.PI * 2;
+
+                this.eventModifier = 1.0;
+                this.eventTimer = 0;
+                this.auraColor = null;
+                this.terrainModifier = 1.0;
+
+                this.hp = 150;
+                this.maxHp = 150;
+                this.attackCooldown = 0;
+                this.hitCooldown = 0;
+                this.isBattleCombatant = false;
+                this.isKO = false;
+
+                this.angle = (Math.random() - 0.5) * 0.2;
+                this.swimPulseTimer = Math.random() * 100;
+                this.swimThrust = 0;
+                this.targetAngleOffset = (Math.random() - 0.5) * 0.5;
+
+                this.microBoostTimer = 0;
+                this.microBoostCooldown = 10 + Math.random() * 45;
+                this.microBoostPower = 1.0;
+                this.pulseStep = 0.04 + Math.random() * 0.08;
+
+                // 끼임 감지: 3초(180스텝) 동안 기준점에서 크게 못 벗어나면 잠깐 벽(바위) 통과
+                this.anchorX = this.x;
+                this.anchorY = this.y;
+                this.stuckTimer = 0;
+                this.ghostTimer = 0;
+                this.ghostCount = 0;
+
+                // 황금 정자: 톱날 사망 후 부활하면 5초간 지형(톱날·바위) 관통 + 속도 1.5배
+                this.goldenTimer = 0;
+                this.wasGolden = false;
+
+                // 아이템(원거리 공격): 트랙 위 아이템을 주우면 계속 보유하며 주기적으로 무작위 발사.
+                // 톱날에 부딪히면 아이템이 대신 사라지고 잠깐 벽을 통과해 빠져나감(itemSaveTimer).
+                // 공격에 맞으면(레이스 중) stunTimer 동안 잠깐 추진력을 잃음.
+                this.hasItem = false;
+                this.itemCooldown = Math.random() * ITEM_SALVO_COOLDOWN_MIN;
+                this.itemSaveTimer = 0;
+                this.stunTimer = 0;
+
+                this.isDead = false;
+                this.deathOrder = 0;
+                this.shieldTimer = 0;
+                this.finished = false;
+                this.rank = 0;
+            }
+
+            setViewScale(bump) {
+                this.scale = this.baseScale * bump;
+                this.headRadius = 14 * this.scale;
+            }
+
+            applyEvent(modifier, durationSteps, color) {
+                this.eventModifier = modifier;
+                this.eventTimer = durationSteps;
+                this.auraColor = color;
+            }
+
+            // 1 스텝(1/60초) 진행
+            update(env) {
+                if (this.finished || this.isDead || this.isKO) return;
+
+                if (this.shieldTimer > 0) this.shieldTimer--;
+                if (this.goldenTimer > 0) this.goldenTimer--;
+                if (this.itemSaveTimer > 0) this.itemSaveTimer--;
+                if (this.stunTimer > 0) this.stunTimer--;
+                if (this.ghostTimer > 0) {
+                    this.ghostTimer--;
+                    if (this.ghostTimer <= 0) {
+                        this.anchorX = this.x;
+                        this.anchorY = this.y;
+                        this.stuckTimer = 0;
+                    }
+                }
+                if (this.eventTimer > 0) {
+                    this.eventTimer--;
+                    if (this.eventTimer <= 0) {
+                        this.eventModifier = 1.0;
+                        this.auraColor = null;
+                    }
+                }
+
+                // 간헐적 마이크로 부스트
+                if (this.microBoostTimer > 0) {
+                    this.microBoostTimer--;
+                } else {
+                    this.microBoostCooldown--;
+                    if (this.microBoostCooldown <= 0) {
+                        this.microBoostTimer = 25 + Math.random() * 45;
+                        this.microBoostPower = 1.6 + Math.random() * 0.6;
+                        this.microBoostCooldown = 15 + Math.random() * 50;
+                    } else {
+                        this.microBoostPower = 1.0;
+                    }
+                }
+
+                // 헤엄 펄스
+                this.swimPulseTimer += this.pulseStep + (Math.random() - 0.5) * 0.035;
+                const pulse = Math.max(0, Math.sin(this.swimPulseTimer));
+                const boost = this.microBoostTimer > 0 ? this.microBoostPower : 1.0;
+                this.swimThrust = (0.55 + pulse * 0.75) * this.baseSpeed * boost;
+
+                // 방향 흔들림
+                if (Math.random() < 0.035) this.targetAngleOffset = (Math.random() - 0.5) * 0.55;
+                this.angle += (this.targetAngleOffset - this.angle) * 0.03;
+                this.angle += (Math.random() - 0.5) * 0.025;
+                this.angle = clamp(this.angle, -0.55, 0.55);
+
+                const { top, bottom } = env.mapBounds;
+                if (this.y - top < 50) this.angle += 0.025;
+                else if (bottom - this.y < 50) this.angle -= 0.025;
+
+                const speedMod = this.eventModifier * this.terrainModifier * (this.goldenTimer > 0 ? GOLDEN_SPEED_MULT : 1);
+                const effectiveThrust = this.stunTimer > 0 ? 0 : this.swimThrust; // 원거리 공격에 맞으면 잠깐 추진력을 잃음
+                let targetVx = Math.cos(this.angle) * effectiveThrust * speedMod;
+                let targetVy = Math.sin(this.angle) * effectiveThrust * speedMod;
+                if (this.ghostTimer > 0 || this.itemSaveTimer > 0) targetVx = Math.max(targetVx, 3.2); // 벽 통과 중에는 앞으로 전진
+
+                // 후반부에는 난자 쪽으로 살짝 유도
+                const progressRatio = this.x / env.raceDistance;
+                if (progressRatio > 0.5) {
+                    targetVy += (env.egg.y - this.y) * 0.008 * (progressRatio - 0.5) * 2.0;
+                }
+
+                // 지형 효과는 이번 스텝에서 다시 계산 (다음 스텝에 반영)
+                this.terrainModifier = 1.0;
+
+                // 아이템 줍기: 최대 1개 보유. 가까이 있으면(ITEM_MAGNET_RANGE) 자석처럼 끌려가 더 쉽게 주움
+                if (!this.hasItem && env.items) {
+                    for (const it of env.items) {
+                        if (!it.available) continue;
+                        const idx = it.x - this.x, idy = it.y - this.y;
+                        const id = Math.hypot(idx, idy);
+                        if (id < this.headRadius + 16) {
+                            this.hasItem = true;
+                            it.available = false;
+                            it.respawnTimer = ITEM_RESPAWN_STEPS;
+                            env.onItemPickup && env.onItemPickup(this);
+                            break;
+                        } else if (id < ITEM_MAGNET_RANGE) {
+                            const pull = (1 - id / ITEM_MAGNET_RANGE) * ITEM_MAGNET_FORCE;
+                            targetVx += (idx / id) * pull;
+                            targetVy += (idy / id) * pull;
+                        }
+                    }
+                }
+
+                // 아이템 보유 중에는 소모되지 않고 계속 쏨: 일정 주기마다 무작위 방향으로 3발 발사 (빗나갈 수 있음)
+                if (this.hasItem) {
+                    if (this.itemCooldown > 0) {
+                        this.itemCooldown--;
+                    } else {
+                        this.itemCooldown = ITEM_SALVO_COOLDOWN_MIN + Math.random() * ITEM_SALVO_COOLDOWN_JITTER;
+                        env.onItemSalvo && env.onItemSalvo(this);
+                    }
+                }
+
+                for (const obs of env.obstacles) {
+                    const dx = this.x - obs.x;
+                    const dy = this.y - obs.y;
+                    const dist = Math.hypot(dx, dy);
+
+                    // 황금 정자 또는 아이템 구조 직후: 톱날·바위를 그대로 통과 (죽지도, 막히지도 않음)
+                    if ((this.goldenTimer > 0 || this.itemSaveTimer > 0) && (obs.type === 'SAWBLADE' || obs.type === 'BOULDER')) continue;
+
+                    if (obs.type === 'SAWBLADE') {
+                        const avoidRadius = obs.radius + 50;
+                        if (dist < avoidRadius && dist > 0) {
+                            const avoidForce = (1 - dist / avoidRadius) * 0.35;
+                            targetVx += (dx / dist) * avoidForce;
+                            targetVy += (dy / dist) * avoidForce;
+                        }
+                        const killDist = this.headRadius + obs.radius * 0.85;
+                        if (dist < killDist) {
+                            const nx = dx / (dist || 1);
+                            const ny = dy / (dist || 1);
+                            const overlap = killDist - dist + 8;
+                            const escapeSign = dy === 0 ? ((this.number % 2 === 0) ? 1 : -1) : (dy > 0 ? 1 : -1);
+
+                            if (this.hasItem) {
+                                // 아이템을 들고 있으면 아이템이 충격을 대신 흡수: 아이템 소멸 + 잠깐 벽 통과로 탈출
+                                this.hasItem = false;
+                                this.x += nx * overlap;
+                                this.y += ny * overlap;
+                                this.vy += escapeSign * (4.8 + Math.random() * 2.5);
+                                this.vx = (nx || -1) * 3.8;
+                                this.itemSaveTimer = ITEM_SAVE_STEPS;
+                                env.onItemSaved && env.onItemSaved(this);
+                            } else if (this.shieldTimer > 0) {
+                                this.x += nx * overlap;
+                                this.y += ny * overlap;
+                                this.vy += escapeSign * (4.8 + Math.random() * 2.5);
+                                this.vx = (nx || -1) * 3.8;
+                                sound.playBounceSound();
+                            } else {
+                                this.isDead = true;
+                                env.onEliminated(this);
+                                if (this.isDead) return; // 부활하지 않았다면 즉시 종료 (중복 탈락 방지)
+                            }
+                        }
+                    } else if (obs.type === 'BOULDER') {
+                        if (this.ghostTimer > 0) continue; // 유령 상태: 바위를 통과
+                        const avoidRadius = obs.radius + 65;
+                        if (dist < avoidRadius && dist > 0) {
+                            const avoidForce = (1 - dist / avoidRadius) * 1.2;
+                            const nx = dx / dist;
+                            const ny = dy / dist;
+                            targetVx += nx * avoidForce * 1.5;
+                            const deflectDir = (dy !== 0) ? (dy > 0 ? 1 : -1) : ((this.number % 2 === 0) ? 1 : -1);
+                            targetVy += (Math.abs(ny) > 0.2 ? ny : deflectDir) * avoidForce * 2.5;
+                        }
+                        const minDist = this.headRadius + obs.radius;
+                        if (dist < minDist) {
+                            const overlap = minDist - dist;
+                            const nx = dx / (dist || 1);
+                            const ny = dy / (dist || 1);
+                            this.x += nx * overlap;
+                            this.y += ny * overlap;
+                            const escapeSign = dy === 0 ? ((this.number % 2 === 0) ? 1 : -1) : (dy > 0 ? 1 : -1);
+                            this.vy += escapeSign * (3.2 + Math.random() * 1.5);
+                            this.vx = nx * 1.8;
+                            sound.playBounceSound();
+                        }
+                    } else if (obs.type === 'SLOW_ZONE') {
+                        if (this.x >= obs.x && this.x <= obs.x + obs.w && this.y >= obs.y && this.y <= obs.y + obs.h) {
+                            this.terrainModifier = 0.5;
+                            sound.playSlimeSound();
+                        }
+                    } else if (obs.type === 'BOOST_PAD') {
+                        if (this.x >= obs.x && this.x <= obs.x + obs.w && this.y >= obs.y && this.y <= obs.y + obs.h) {
+                            this.terrainModifier = 1.85;
+                            sound.playBoostSound();
+                        }
+                    }
+                }
+
+                for (const c of env.currents) {
+                    if (this.x >= c.x && this.x <= c.x + c.w && this.y >= c.y && this.y <= c.y + c.h) {
+                        targetVx += c.forceX;
+                        targetVy += c.forceY;
+                    }
+                }
+
+                this.vx += (targetVx - this.vx) * 0.12;
+                this.vy += (targetVy - this.vy) * 0.12;
+
+                this.x += this.vx;
+                this.y += this.vy;
+
+                if (this.y < top)    { this.y = top;    this.vy *= -0.6; this.angle *= -0.5; }
+                if (this.y > bottom) { this.y = bottom; this.vy *= -0.6; this.angle *= -0.5; }
+
+                this.tailPhase += this.tailSpeed * (Math.abs(this.vx) * 0.8 + 0.3);
+
+                // 끼임 감지: 3초 동안 위치가 거의 변하지 않았다면 1.5초간 벽(바위)을 통과
+                if (this.ghostTimer <= 0) {
+                    const moved = Math.hypot(this.x - this.anchorX, this.y - this.anchorY);
+                    if (moved > STUCK_DISTANCE) {
+                        this.anchorX = this.x;
+                        this.anchorY = this.y;
+                        this.stuckTimer = 0;
+                    } else if (++this.stuckTimer >= STUCK_STEPS) {
+                        this.stuckTimer = 0;
+                        this.ghostTimer = GHOST_STEPS;
+                        this.ghostCount++;
+                    }
+                }
+            }
+
+            draw(ctx, cameraX, viewW) {
+                const renderX = this.x - cameraX;
+                const renderY = this.y;
+                if (renderX < -120 || renderX > viewW + 120) return;
+
+                ctx.save();
+
+                // 탈락 / KO 표시
+                if (this.isDead || this.isKO) {
+                    ctx.globalAlpha = this.isKO ? 0.5 : 0.35;
+                    ctx.translate(renderX, renderY);
+                    ctx.fillStyle = '#ef4444';
+                    ctx.font = '900 18px Pretendard, sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText('💀', 0, 0);
+                    ctx.fillStyle = '#f87171';
+                    ctx.font = `bold ${Math.max(9, Math.round(10 * this.scale))}px Pretendard, sans-serif`;
+                    ctx.fillText(`${this.number}번 (${this.isKO ? 'KO' : '탈락'})`, 0, 16);
+                    ctx.restore();
+                    return;
+                }
+
+                // 결투 중 HP 바
+                if (this.isBattleCombatant) {
+                    const barW = 36, barH = 5;
+                    const bx = renderX - barW / 2;
+                    const by = renderY - this.headRadius - 16;
+                    ctx.fillStyle = '#0f172a';
+                    ctx.fillRect(bx - 1, by - 1, barW + 2, barH + 2);
+                    const hpRatio = Math.max(0, this.hp / this.maxHp);
+                    ctx.fillStyle = hpRatio > 0.5 ? '#10b981' : hpRatio > 0.25 ? '#f59e0b' : '#ef4444';
+                    ctx.fillRect(bx, by, barW * hpRatio, barH);
+                    ctx.strokeStyle = '#ffffff';
+                    ctx.lineWidth = 1;
+                    ctx.strokeRect(bx, by, barW, barH);
+                }
+
+                const golden = this.goldenTimer > 0;
+                const bodyColor = golden ? '#fde047' : this.color;
+
+                if (golden) {
+                    ctx.shadowColor = '#facc15'; ctx.shadowBlur = 30;
+                } else if (this.itemSaveTimer > 0) {
+                    ctx.globalAlpha = 0.55;
+                    ctx.shadowColor = '#f472b6'; ctx.shadowBlur = 26;
+                } else if (this.ghostTimer > 0) {
+                    ctx.globalAlpha = 0.5;
+                    ctx.shadowColor = '#c4b5fd'; ctx.shadowBlur = 24;
+                } else if (this.shieldTimer > 0) {
+                    ctx.shadowColor = '#38bdf8'; ctx.shadowBlur = 20;
+                } else if (this.isBattleCombatant) {
+                    ctx.shadowColor = '#f43f5e'; ctx.shadowBlur = 22;
+                } else if (this.auraColor) {
+                    ctx.shadowColor = this.auraColor; ctx.shadowBlur = 18;
+                } else if (this.microBoostTimer > 0) {
+                    ctx.shadowColor = this.color; ctx.shadowBlur = 14;
+                }
+
+                const angle = Math.atan2(this.vy, this.vx);
+                ctx.translate(renderX, renderY);
+                ctx.rotate(angle);
+
+                if (this.shieldTimer > 0) {
+                    ctx.strokeStyle = '#38bdf8';
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, this.headRadius + 8, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
+
+                if (golden) {
+                    // 남은 시간에 따라 깜빡이는 황금 링 (끝나기 1초 전부터 빠르게 깜빡임)
+                    const blink = this.goldenTimer < 60 ? (Math.floor(this.goldenTimer / 6) % 2 === 0) : true;
+                    if (blink) {
+                        ctx.strokeStyle = '#facc15';
+                        ctx.lineWidth = 3;
+                        ctx.setLineDash([6, 4]);
+                        ctx.beginPath();
+                        ctx.arc(0, 0, this.headRadius + 10, 0, Math.PI * 2);
+                        ctx.stroke();
+                        ctx.setLineDash([]);
+                    }
+                }
+
+                if (this.itemSaveTimer > 0) {
+                    ctx.strokeStyle = '#f472b6';
+                    ctx.lineWidth = 2.5;
+                    ctx.setLineDash([5, 5]);
+                    ctx.beginPath();
+                    ctx.arc(0, 0, this.headRadius + 9, 0, Math.PI * 2);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                }
+
+                // 꼬리
+                ctx.beginPath();
+                ctx.moveTo(-this.headRadius + 2, 0);
+                const tailSegments = 14;
+                const tailLength = 38 * this.scale;
+                for (let i = 0; i <= tailSegments; i++) {
+                    const segX = -this.headRadius - (i * (tailLength / tailSegments));
+                    const waveAmp = (i / tailSegments) * 10 * this.scale;
+                    const segY = Math.sin(this.tailPhase - i * 0.45) * waveAmp;
+                    ctx.lineTo(segX, segY);
+                }
+                ctx.strokeStyle = golden ? '#fde047' : this.isBattleCombatant ? '#f43f5e' : this.auraColor ? this.auraColor : this.color;
+                ctx.lineWidth = Math.max(2, 4 * this.scale);
+                ctx.lineCap = 'round';
+                ctx.stroke();
+
+                // 머리
+                ctx.fillStyle = bodyColor;
+                ctx.beginPath();
+                ctx.ellipse(0, 0, this.headRadius + 4 * this.scale, this.headRadius, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = Math.max(1, 2 * this.scale);
+                ctx.stroke();
+
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+                ctx.beginPath();
+                ctx.ellipse(3 * this.scale, -4 * this.scale, 5 * this.scale, 2.8 * this.scale, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.rotate(-angle);
+
+                // 번호
+                ctx.fillStyle = '#000000';
+                ctx.font = `900 ${Math.max(8, Math.round(12 * this.scale))}px Pretendard, sans-serif`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(this.number, 0, 0.5);
+
+                if (golden) {
+                    ctx.font = `${Math.max(12, Math.round(16 * this.scale))}px Pretendard, sans-serif`;
+                    ctx.fillText('🌟', this.headRadius + 8 * this.scale, -this.headRadius - 4 * this.scale);
+                }
+
+                if (this.hasItem) {
+                    ctx.font = `${Math.max(11, Math.round(14 * this.scale))}px Pretendard, sans-serif`;
+                    ctx.fillText('🔮', -this.headRadius - 6 * this.scale, -this.headRadius - 4 * this.scale);
+                }
+
+                if (this.stunTimer > 0) {
+                    ctx.font = `${Math.max(11, Math.round(14 * this.scale))}px Pretendard, sans-serif`;
+                    ctx.fillText('💫', 0, -this.headRadius - 16 * this.scale);
+                }
+
+                // 별칭
+                if (this.label && this.label !== `${this.number}번`) {
+                    ctx.fillStyle = '#ffffff';
+                    ctx.font = `bold ${Math.max(9, Math.round(11 * Math.max(this.scale, 0.8)))}px Pretendard, sans-serif`;
+                    ctx.shadowColor = 'rgba(0,0,0,0.9)';
+                    ctx.shadowBlur = 5;
+                    ctx.fillText(this.label, 0, -this.headRadius - 8);
+                }
+
+                ctx.restore();
+            }
+        }
+
+        // ------------------------------------------------------------------
+        // 게임 본체
+        // ------------------------------------------------------------------
+        class SpermRaceGame {
+            constructor() {
+                this.canvas = document.getElementById('raceCanvas');
+                this.ctx = this.canvas.getContext('2d');
+
+                this.totalN = 20;
+                this.showLoser = true;
+                this.speed = 1;          // 화면 1프레임당 진행할 스텝 배율 (1x / 2x / 4x)
+                this.paused = false;
+                this.simulating = false; // '결과 즉시보기' 계산 중
+
+                this.participants = [];
+                this.obstacles = [];
+                this.currents = [];
+                this.items = [];
+                this.projectiles = [];
+
+                this.isRacing = false;
+                this.isFinished = false;
+                this.isBattleArena = false;
+                this.battleSperms = [];
+                this.damageTexts = [];
+                this.eliminationRankOrder = [];
+                this.finalRanking = [];
+                this.deathCounter = 0;
+                this.tick = 0;
+                this.stepAcc = 0;
+                this.lastTs = 0;
+
+                this.raceDistance = 6200;
+                this.cameraX = 0;
+                this.eggX = this.raceDistance + 70;
+                this.eggY = 0;
+                this.eggRadius = 80;
+                this.eggPulse = 0;
+
+                this.nextEventDistance = 1200;
+                this.particles = [];
+                this.resultTimer = null;
+                this.bannerTimer = null;
+                this.lastBattleHtml = '';
+
+                const $ = (id) => document.getElementById(id);
+                this.modalSettings = $('modal-settings');
+                this.modalRules = $('modal-rules');
+                this.settingsOpen = false;
+                this.rulesOpen = false;
+                this.modalResult = $('modal-result');
+                this.inputNCount = $('input-n-count');
+                this.inputNames = $('input-names');
+                this.toggleShowLoser = $('toggle-show-loser');
+
+                this.hudLeaderName = $('hud-leader-name');
+                this.hudCount = $('hud-count');
+                this.hudAliveCount = $('hud-alive-count');
+                this.hudProgressBar = $('hud-progress-bar');
+                this.hudProgressText = $('hud-progress-text');
+                this.battleHudOverlay = $('battle-hud-overlay');
+                this.battleHpBars = $('battle-hp-bars');
+                this.btnStart = $('btn-start-race');
+                this.btnSkip = $('btn-skip-race');
+
+                this.initCanvasSize();
+                this.bindEvents();
+                window.addEventListener('resize', () => this.handleResize());
+                if (typeof ResizeObserver !== 'undefined') {
+                    new ResizeObserver(() => this.handleResize()).observe(this.canvas.parentElement);
+                }
+
+                // 설정 모달 뒤에 보일 기본 20마리
+                this.buildParticipants(20, []);
+                this.resetRace();
+            }
+
+            start() {
+                requestAnimationFrame((t) => this.loop(t));
+            }
+
+            // ---------------- 초기화 / 설정 ----------------
+            initCanvasSize() {
+                const host = this.canvas.parentElement;
+                const header = document.querySelector('header');
+                const headerH = (header && header.offsetHeight) || 0;
+                const w = (host && host.clientWidth) || window.innerWidth;
+                const h = (host && host.clientHeight) || Math.max(200, window.innerHeight - headerH);
+
+                this.dpr = Math.min(window.devicePixelRatio || 1, 2);
+                this.canvas.width = Math.floor(w * this.dpr);
+                this.canvas.height = Math.floor(h * this.dpr);
+                this.canvas.style.width = w + 'px';
+                this.canvas.style.height = h + 'px';
+
+                // 가상 월드는 항상 세로 MIN_WORLD_H 이상. 화면이 더 작으면 배율(zoom)로 줄여서
+                // 레이스 필드 전체가 화면에 딱 맞게 꽉 차도록 함 (좁은 창에서도 넓은 필드 유지)
+                this.viewH = Math.max(h, MIN_WORLD_H);
+                this.zoom = h / this.viewH;
+                this.viewW = w / this.zoom;
+                this.bump = 1 / Math.sqrt(this.zoom); // 축소 시 정자/글자를 조금 키워 가독성 유지
+                this.W = this.viewW;
+                this.H = this.viewH;
+
+                const pad = 12 / this.zoom;
+                const top = pad;
+                const bottom = this.viewH - pad;
+                this.mapBounds = { top, bottom };
+                this.eggY = (top + bottom) / 2;
+
+                if (this.participants) {
+                    this.participants.forEach(s => s.setViewScale(this.bump));
+                }
+            }
+
+            handleResize() {
+                this.initCanvasSize();
+                if (!this.isRacing && !this.isFinished) this.resetRace();
+            }
+
+            buildParticipants(n, names) {
+                this.totalN = n;
+                const scale = n <= 20 ? 1 : n <= 50 ? 0.8 : 0.6;
+                this.participants = [];
+                for (let i = 1; i <= n; i++) {
+                    const sp = new SpermSwimmer(i, names[i - 1] || `${i}번`, scale);
+                    sp.setViewScale(this.bump || 1);
+                    this.participants.push(sp);
+                }
+                this.hudCount.textContent = n;
+            }
+
+            applySettings(startNow = true) {
+                let n = parseInt(this.inputNCount.value, 10);
+                if (!Number.isFinite(n)) n = 20;
+                n = clamp(n, 2, 100);
+
+                const names = this.inputNames.value.split('\n').map(s => s.trim()).filter(s => s.length > 0);
+
+                // 이름이 N보다 많으면 누락되지 않도록 N을 늘림 (공정한 추첨을 위해)
+                if (names.length > n) {
+                    if (names.length > 100) {
+                        alert('이름이 100개를 넘어 앞의 100개만 사용됩니다.');
+                    }
+                    n = Math.min(100, names.length);
+                }
+                this.inputNCount.value = n;
+                this.showLoser = this.toggleShowLoser.checked;
+
+                this.buildParticipants(n, names);
+                this.closeSettings();
+                this.resetRace();
+                if (startNow) this.startRace();
+            }
+
+            updatePaused() {
+                this.paused = !!(this.settingsOpen || this.rulesOpen);
+            }
+
+            openSettings() {
+                this.settingsOpen = true;
+                this.updatePaused();
+                this.modalSettings.classList.remove('opacity-0', 'pointer-events-none');
+                this.modalSettings.classList.add('opacity-100', 'pointer-events-auto');
+            }
+
+            closeSettings() {
+                this.settingsOpen = false;
+                this.updatePaused();
+                this.modalSettings.classList.add('opacity-0', 'pointer-events-none');
+                this.modalSettings.classList.remove('opacity-100', 'pointer-events-auto');
+            }
+
+            openRules() {
+                this.rulesOpen = true;
+                this.updatePaused();
+                this.modalRules.classList.remove('opacity-0', 'pointer-events-none');
+                this.modalRules.classList.add('opacity-100', 'pointer-events-auto');
+            }
+
+            closeRules() {
+                if (!this.rulesOpen) return;
+                this.rulesOpen = false;
+                this.updatePaused();
+                this.modalRules.classList.add('opacity-0', 'pointer-events-none');
+                this.modalRules.classList.remove('opacity-100', 'pointer-events-auto');
+            }
+
+            // 규칙창의 숫자는 실제 게임 상수에서 가져와 항상 실제 값과 일치하게 함
+            fillRuleValues() {
+                const v = {
+                    'golden-chance': `${Math.round(GOLDEN_CHANCE * 100)}%`,
+                    'golden-sec': `${GOLDEN_STEPS / 60}`,
+                    'golden-mult': `${GOLDEN_SPEED_MULT}`,
+                    'stuck-sec': `${STUCK_STEPS / 60}`,
+                    'ghost-sec': `${+(GHOST_STEPS / 60).toFixed(1)}`,
+                    'mega-chance': `${Math.round(BATTLE_MEGA_CHANCE * 100)}%`,
+                    'mega-mult': `${BATTLE_MEGA_MULT}`
+                };
+                document.querySelectorAll('[data-rule]').forEach(el => {
+                    if (v[el.dataset.rule] !== undefined) el.textContent = v[el.dataset.rule];
+                });
+            }
+
+            generateObstaclesAndCurrents() {
+                this.obstacles = [];
+                this.currents = [];
+
+                const { top, bottom } = this.mapBounds;
+                const span = bottom - top;
+                const mapWidth = this.raceDistance - 400;
+                const rows = Math.max(1, Math.round(span / 560));
+
+                for (let row = 0; row < rows; row++) {
+                for (let x = 450 + Math.random() * 120; x < mapWidth; x += 380 + Math.random() * 220) {
+                    this.obstacles.push({
+                        type: 'SAWBLADE',
+                        x,
+                        y: top + 60 + Math.random() * (span - 120),
+                        radius: 32 + Math.random() * 14,
+                        rotation: Math.random() * Math.PI * 2,
+                        rotSpeed: (Math.random() > 0.5 ? 1 : -1) * (0.08 + Math.random() * 0.08)
+                    });
+                }
+
+                for (let x = 320; x < mapWidth; x += 180 + Math.random() * 120) {
+                    // 바위와 상/하단 벽 사이에 정자가 지나갈 틈(GAP)을 항상 남겨 길이 막히지 않게 함
+                    const GAP = 48;
+                    const radius = Math.min(45 + Math.random() * 23, Math.max(20, (span - GAP * 2 - 10) / 2));
+                    const minY = top + radius + GAP;
+                    const maxY = bottom - radius - GAP;
+                    this.obstacles.push({
+                        type: 'BOULDER',
+                        x,
+                        y: maxY > minY ? minY + Math.random() * (maxY - minY) : (top + bottom) / 2,
+                        radius
+                    });
+                }
+
+                for (let x = 600; x < mapWidth; x += 650 + Math.random() * 300) {
+                    this.obstacles.push({
+                        type: 'SLOW_ZONE',
+                        x,
+                        y: top + Math.random() * Math.max(10, span - 150),
+                        w: 280 + Math.random() * 100,
+                        h: 140 + Math.random() * 60
+                    });
+                }
+
+                for (let x = 800; x < mapWidth; x += 700 + Math.random() * 300) {
+                    this.obstacles.push({
+                        type: 'BOOST_PAD',
+                        x,
+                        y: top + Math.random() * Math.max(10, span - 120),
+                        w: 260 + Math.random() * 80,
+                        h: 120 + Math.random() * 50
+                    });
+                }
+
+                for (let x = 500; x < mapWidth; x += 850 + Math.random() * 400) {
+                    const isUp = Math.random() > 0.5;
+                    this.currents.push({
+                        x,
+                        y: top + Math.random() * Math.max(10, span - 100),
+                        w: 110 + Math.random() * 50,
+                        h: 120 + Math.random() * 60,
+                        forceY: isUp ? -1.8 : 1.8,
+                        forceX: 0.6,
+                        label: isUp ? '↑ 수류' : '↓ 수류'
+                    });
+                }
+                } // rows
+
+                // 원거리 공격용 아이템을 트랙 위에 몇 개 배치 (인원이 많을수록 조금 더 많이)
+                this.items = [];
+                const itemCount = clamp(3 + Math.floor(this.totalN / 25), 3, 8);
+                for (let k = 0; k < itemCount; k++) {
+                    this.items.push({
+                        x: 650 + Math.random() * Math.max(100, mapWidth - 900),
+                        y: top + Math.random() * Math.max(10, span - 60),
+                        available: true,
+                        respawnTimer: 0
+                    });
+                }
+            }
+
+            resetRace() {
+                clearTimeout(this.resultTimer);
+                this.hideResultsModal();
+                this.hideEventBanner();
+
+                this.isRacing = false;
+                this.isFinished = false;
+                this.isBattleArena = false;
+                this.battleSperms = [];
+                this.damageTexts = [];
+                this.particles = [];
+                this.eliminationRankOrder = [];
+                this.finalRanking = [];
+                this.projectiles = [];
+                this.deathCounter = 0;
+                this.tick = 0;
+                this.stepAcc = 0;
+                this.lastBattleHtml = '';
+
+                this.cameraX = 0;
+                this.nextEventDistance = 1200;
+
+                // 출발 레인을 매번 무작위로 섞어 특정 번호가 유리한 위치(벽 근처 등)를 독점하지 않게 함
+                const gap = (this.mapBounds.bottom - this.mapBounds.top) / (this.totalN + 1);
+                const lanes = this.participants.map((_, i) => i + 1);
+                for (let i = lanes.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [lanes[i], lanes[j]] = [lanes[j], lanes[i]];
+                }
+                this.participants.forEach((s, idx) => {
+                    s.reset(this.mapBounds.top + gap * lanes[idx]);
+                });
+
+                this.generateObstaclesAndCurrents();
+                this.battleHudOverlay.classList.add('hidden');
+                this.battleHpBars.innerHTML = '';
+            }
+
+            startRace() {
+                this.resetRace();
+                this.isRacing = true;
+                sound.playStartWhistle();
+            }
+
+            // ---------------- 결과 즉시보기 ----------------
+            skipToResult() {
+                if (!this.isRacing || this.isFinished) return;
+                clearTimeout(this.resultTimer);
+
+                this.simulating = true;
+                sound.suppress++;
+                let guard = 0;
+                while (!this.isFinished && guard++ < 300000) {
+                    this.updateGameLogic();
+                }
+                sound.suppress--;
+                this.simulating = false;
+
+                // 만약의 무한루프 방지: 가장 앞선 생존자를 우승 처리
+                if (!this.isFinished) {
+                    const alive = this.participants.filter(p => !p.isDead).sort((a, b) => b.x - a.x);
+                    this.onSpermFertilized(alive[0] || this.participants[0]);
+                    clearTimeout(this.resultTimer);
+                }
+
+                this.particles = [];
+                this.damageTexts = [];
+                this.spawnParticles();
+                sound.playEggPenetrationSound();
+                sound.playVictoryFanfare();
+                this.showResultsModal();
+            }
+
+            // ---------------- 메인 루프 ----------------
+            loop(ts) {
+                const dt = Math.min(100, ts - (this.lastTs || ts));
+                this.lastTs = ts;
+
+                if (this.isRacing && !this.paused) {
+                    this.stepAcc += (dt / STEP_MS) * this.speed;
+                    let n = 0;
+                    while (this.stepAcc >= 1 && n < 48 && this.isRacing) {
+                        this.updateGameLogic();
+                        this.stepAcc -= 1;
+                        n++;
+                    }
+                    if (this.stepAcc >= 1) this.stepAcc = 0;
+                } else if (!this.isRacing && !this.isFinished) {
+                    // 대기 중에는 꼬리만 살랑살랑
+                    this.participants.forEach(s => { s.tailPhase += 0.08; });
+                }
+
+                this.updateHud();
+                this.render();
+                requestAnimationFrame((t) => this.loop(t));
+            }
+
+            // 1 스텝 (1/60초) 진행
+            updateGameLogic() {
+                if (this.isFinished) return;
+                this.tick++;
+
+                for (const obs of this.obstacles) {
+                    if (obs.type === 'SAWBLADE') obs.rotation += obs.rotSpeed;
+                }
+
+                for (const it of this.items) {
+                    if (!it.available) {
+                        it.respawnTimer--;
+                        if (it.respawnTimer <= 0) it.available = true;
+                    }
+                }
+                this.updateProjectiles();
+
+                if (!this.isBattleArena) {
+                    const alive = this.participants.filter(p => !p.isDead && !p.finished);
+                    let leadX = 0;
+                    for (const p of alive) if (p.x > leadX) leadX = p.x;
+
+                    if (leadX >= this.raceDistance - 400) {
+                        if (alive.length >= 2) {
+                            this.startBattle(alive);
+                        } else if (alive.length === 1) {
+                            // 혼자 남은 경우: 바로 난자로 돌진
+                            const solo = alive[0];
+                            this.followEggCamera(0.1);
+                            if (this.rushToEgg(solo)) {
+                                solo.finished = true;
+                                this.onSpermFertilized(solo);
+                            }
+                            return;
+                        }
+                    }
+                }
+
+                if (this.isBattleArena) {
+                    this.updateBattleArenaLogic();
+                    return;
+                }
+
+                const activeList = this.participants.filter(p => !p.isDead && !p.finished);
+                const env = {
+                    raceDistance: this.raceDistance,
+                    mapBounds: this.mapBounds,
+                    obstacles: this.obstacles,
+                    currents: this.currents,
+                    items: this.items,
+                    rivals: activeList,
+                    egg: { x: this.eggX, y: this.eggY, radius: this.eggRadius },
+                    onEliminated: (s) => this.handleEliminatedSperm(s),
+                    onItemPickup: (s) => this.handleItemPickup(s),
+                    onItemFire: (shooter, target) => this.fireItem(shooter, target),
+                    onItemLost: (s) => this.handleItemLost(s)
+                };
+
+                let leadX = 0;
+                for (const s of this.participants) {
+                    s.update(env);
+                    if (!s.isDead && s.x > leadX) leadX = s.x;
+                }
+
+                if (leadX >= this.nextEventDistance && leadX < this.raceDistance - 500) {
+                    this.triggerRandomEvent();
+                    this.nextEventDistance += 1200 + Math.random() * 400;
+                }
+
+                const targetCamX = Math.max(0, leadX - this.W * 0.35);
+                this.cameraX += (targetCamX - this.cameraX) * 0.1;
+            }
+
+            followEggCamera(rate) {
+                const targetCamX = this.eggX - this.W / 2;
+                this.cameraX += (targetCamX - this.cameraX) * rate;
+            }
+
+            rushToEgg(s) {
+                s.goldenTimer = 0;
+                s.ghostTimer = 0;
+                const dx = this.eggX - s.x;
+                const dy = this.eggY - s.y;
+                const d = Math.hypot(dx, dy);
+                if (d < 25) return true;
+                const step = Math.min(5.0, d);
+                s.vx = (dx / d) * 5.0;
+                s.vy = (dy / d) * 5.0;
+                s.x += (dx / d) * step;
+                s.y += (dy / d) * step;
+                return d - step < 25;
+            }
+
+            // ---------------- 최종 결투 ----------------
+            startBattle(alive) {
+                this.isBattleArena = true;
+                this.participants.forEach(p => { p.goldenTimer = 0; p.ghostTimer = 0; });
+                const sorted = [...alive].sort((a, b) => b.x - a.x);
+                this.battleSperms = sorted.slice(0, 3);
+                this.battleSperms.forEach(s => {
+                    s.isBattleCombatant = true;
+                    s.hp = s.maxHp = 150;
+                    s.attackCooldown = 30 + Math.random() * 30;
+                    s.hitCooldown = 0;
+                });
+                this.battleHudOverlay.classList.remove('hidden');
+            }
+
+            updateBattleArenaLogic() {
+                const eggX = this.eggX;
+                const eggY = this.eggY;
+                const { top, bottom } = this.mapBounds;
+
+                this.followEggCamera(0.15);
+
+                const fighters = this.battleSperms.filter(s => s.hp > 0);
+
+                if (fighters.length === 1) {
+                    const winner = fighters[0];
+                    if (this.rushToEgg(winner)) {
+                        winner.finished = true;
+                        this.onSpermFertilized(winner);
+                    }
+                    return;
+                }
+                if (fighters.length === 0) return; // 안전장치 (동시 KO는 아래에서 방지됨)
+
+                fighters.forEach(s => { if (s.hitCooldown > 0) s.hitCooldown--; });
+
+                fighters.forEach((s, idx) => {
+                    if (s.hp <= 0) return;
+                    const opponents = fighters.filter(o => o !== s && o.hp > 0);
+                    if (opponents.length === 0) return;
+
+                    opponents.sort((a, b) => Math.hypot(a.x - s.x, a.y - s.y) - Math.hypot(b.x - s.x, b.y - s.y));
+                    const target = opponents[0];
+
+                    // 결투 중 아이템을 들고 있으면 근접하지 않고 먼저 원거리 공격을 씀
+                    if (s.hasItem) {
+                        s.hasItem = false;
+                        this.fireItem(s, target);
+                        return;
+                    }
+
+                    s.attackCooldown--;
+                    if (s.attackCooldown <= 0) {
+                        const ang = Math.atan2(target.y - s.y, target.x - s.x);
+                        const power = 5.5 + Math.random() * 3.5;
+                        s.vx = Math.cos(ang) * power;
+                        s.vy = Math.sin(ang) * power;
+                        s.attackCooldown = 50 + Math.random() * 45;
+                    } else {
+                        const ang = Math.atan2(s.y - eggY, s.x - eggX) + (idx % 2 === 0 ? 0.06 : -0.06);
+                        const orbitR = this.eggRadius + 35 + Math.sin(this.tick * 0.05 + idx) * 30;
+                        const tx = eggX + Math.cos(ang) * orbitR;
+                        const ty = eggY + Math.sin(ang) * orbitR;
+                        s.vx += (tx - s.x) * 0.05;
+                        s.vy += (ty - s.y) * 0.05;
+                    }
+
+                    s.vx *= 0.90;
+                    s.vy *= 0.90;
+                    s.x += s.vx;
+                    s.y = clamp(s.y + s.vy, top, bottom);
+
+                    fighters.forEach(opponent => {
+                        if (opponent === s || opponent.hp <= 0) return;
+                        const dist = Math.hypot(opponent.x - s.x, opponent.y - s.y);
+                        if (dist < s.headRadius + opponent.headRadius + 14 && opponent.hitCooldown <= 0) {
+                            opponent.hitCooldown = 28;
+
+                            const isCrit = Math.random() < 0.25;
+                            let damage = isCrit ? 16 + Math.floor(Math.random() * 8) : 7 + Math.floor(Math.random() * 5);
+                            // 15% 확률로 데미지 2.5배 폭발 (치명타와 겹치면 곱해짐)
+                            const isMega = Math.random() < BATTLE_MEGA_CHANCE;
+                            if (isMega) damage = Math.round(damage * BATTLE_MEGA_MULT);
+                            opponent.hp -= damage;
+                            sound.playClashSound();
+
+                            if (!this.simulating) {
+                                this.damageTexts.push({
+                                    x: opponent.x,
+                                    y: opponent.y - 15,
+                                    text: isMega ? `💥 MEGA HIT! -${damage}` : isCrit ? `CRITICAL! -${damage}` : `-${damage}`,
+                                    color: isMega ? '#f43f5e' : isCrit ? '#f59e0b' : '#ef4444',
+                                    alpha: 1.0
+                                });
+                            }
+
+                            const pushAngle = Math.atan2(opponent.y - s.y, opponent.x - s.x);
+                            const pushPower = isMega ? 10 : 6;
+                            opponent.vx += Math.cos(pushAngle) * pushPower;
+                            opponent.vy += Math.sin(pushAngle) * pushPower;
+
+                            if (opponent.hp <= 0) {
+                                // 동시에 모두 쓰러져 승자가 없어지는 상황 방지
+                                const aliveNow = this.battleSperms.filter(b => b !== opponent && b.hp > 0).length;
+                                if (aliveNow === 0) {
+                                    opponent.hp = 1;
+                                } else {
+                                    opponent.hp = 0;
+                                    opponent.isKO = true;
+                                    sound.playKOSound();
+                                    this.eliminationRankOrder.unshift(opponent); // 나중에 쓰러질수록 높은 순위
+                                }
+                            }
+                        }
+                    });
+                });
+            }
+
+            // ---------------- 이벤트 ----------------
+            triggerRandomEvent() {
+                const alive = this.participants.filter(p => !p.isDead && !p.finished);
+                if (alive.length === 0) return;
+
+                const DURATION = 210; // 약 3.5초 (스텝 기준이라 배속/즉시보기에서도 동일)
+                let type = Math.floor(Math.random() * 3);
+                if (alive.length < 2) type = 0;
+
+                const sortedByX = [...alive].sort((a, b) => b.x - a.x);
+
+                if (type === 0) {
+                    // 뒤처질수록 뽑힐 확률이 높은 무작위 스퍼트
+                    const leadX = sortedByX[0].x;
+                    const count = Math.max(1, Math.round(alive.length * 0.15));
+                    const pool = [...alive];
+                    for (let k = 0; k < count && pool.length > 0; k++) {
+                        const weights = pool.map(p => 100 + Math.pow(Math.max(0, leadX - p.x), 1.25));
+                        const total = weights.reduce((a, b) => a + b, 0);
+                        let r = Math.random() * total;
+                        let idx = 0;
+                        for (let i = 0; i < pool.length; i++) {
+                            r -= weights[i];
+                            if (r <= 0) { idx = i; break; }
+                        }
+                        const picked = pool.splice(idx, 1)[0];
+                        picked.applyEvent(2.0 + Math.random() * 0.6, DURATION, '#f59e0b');
+                    }
+                    this.showEventBanner('⚡', '후발 정자 무작위 스퍼트 가속!');
+                } else if (type === 1) {
+                    const count = Math.max(1, Math.round(alive.length * 0.2));
+                    sortedByX.slice(0, count).forEach(p => p.applyEvent(0.85, DURATION, '#60a5fa'));
+                    this.showEventBanner('🌊', '선두권 역방향 수류 발생! (상위 20% -15%)');
+                } else {
+                    const count = Math.max(1, Math.round(alive.length * 0.2));
+                    sortedByX.slice(-count).forEach(p => p.applyEvent(1.8 + Math.random() * 0.4, DURATION, '#f97316'));
+                    this.showEventBanner('🔥', '하위권 대추격전! (하위 20% 가속)');
+                }
+            }
+
+            showEventBanner(icon, desc, title = '돌발 이벤트!') {
+                if (this.simulating) return;
+                const banner = document.getElementById('event-banner');
+                document.getElementById('event-icon').textContent = icon;
+                document.getElementById('event-title').textContent = title;
+                document.getElementById('event-desc').textContent = desc;
+
+                clearTimeout(this.bannerTimer);
+                banner.classList.remove('animate-event-banner');
+                banner.classList.remove('hidden');
+                banner.classList.add('flex');
+                void banner.offsetWidth; // 애니메이션 재시작
+                banner.classList.add('animate-event-banner');
+                this.bannerTimer = setTimeout(() => this.hideEventBanner(), 2200);
+            }
+
+            hideEventBanner() {
+                clearTimeout(this.bannerTimer);
+                const banner = document.getElementById('event-banner');
+                banner.classList.add('hidden');
+                banner.classList.remove('flex', 'animate-event-banner');
+            }
+
+            // ---------------- 아이템 / 원거리 공격 ----------------
+            handleItemPickup(s) {
+                sound.playItemPickupSound();
+                if (!this.simulating) {
+                    for (let i = 0; i < 10; i++) {
+                        const a = Math.random() * Math.PI * 2;
+                        this.particles.push({
+                            x: s.x - this.cameraX,
+                            y: s.y,
+                            vx: Math.cos(a) * (1 + Math.random() * 3),
+                            vy: Math.sin(a) * (1 + Math.random() * 3),
+                            radius: Math.random() * 2.5 + 1.5,
+                            color: i % 2 ? '#e9d5ff' : '#a855f7',
+                            alpha: 1.0
+                        });
+                    }
+                }
+            }
+
+            handleItemLost(s) {
+                // 아이템을 든 채 톱날에 부딪히면 아이템이 사라짐 (생사 여부와 무관)
+                if (!this.simulating) {
+                    this.damageTexts.push({ x: s.x, y: s.y - 18, text: '🔮 아이템 소실', color: '#c4b5fd', alpha: 1.0 });
+                }
+            }
+
+            fireItem(shooter, target) {
+                sound.playItemShotSound();
+                this.projectiles.push({
+                    x: shooter.x,
+                    y: shooter.y,
+                    target,
+                    from: shooter,
+                    color: shooter.color
+                });
+            }
+
+            updateProjectiles() {
+                for (let i = this.projectiles.length - 1; i >= 0; i--) {
+                    const pr = this.projectiles[i];
+                    const t = pr.target;
+                    if (!t || t.isDead || t.isKO || t.finished) { this.projectiles.splice(i, 1); continue; }
+                    const dx = t.x - pr.x, dy = t.y - pr.y;
+                    const d = Math.hypot(dx, dy);
+                    if (d < 16) {
+                        this.applyItemHit(pr.from, t);
+                        this.projectiles.splice(i, 1);
+                        continue;
+                    }
+                    pr.x += (dx / d) * ITEM_PROJECTILE_SPEED;
+                    pr.y += (dy / d) * ITEM_PROJECTILE_SPEED;
+                }
+            }
+
+            applyItemHit(shooter, target) {
+                sound.playItemHitSound();
+
+                if (target.isBattleCombatant) {
+                    const damage = ITEM_BATTLE_DMG_MIN + Math.floor(Math.random() * (ITEM_BATTLE_DMG_MAX - ITEM_BATTLE_DMG_MIN + 1));
+                    target.hp -= damage;
+
+                    if (!this.simulating) {
+                        this.damageTexts.push({
+                            x: target.x, y: target.y - 15,
+                            text: `🔮 아이템 적중! -${damage}`,
+                            color: '#a855f7',
+                            alpha: 1.0
+                        });
+                    }
+
+                    const pushAngle = Math.atan2(target.y - shooter.y, target.x - shooter.x);
+                    target.vx += Math.cos(pushAngle) * 8;
+                    target.vy += Math.sin(pushAngle) * 8;
+
+                    if (target.hp <= 0) {
+                        const aliveNow = this.battleSperms.filter(b => b !== target && b.hp > 0).length;
+                        if (aliveNow === 0) {
+                            target.hp = 1;
+                        } else {
+                            target.hp = 0;
+                            target.isKO = true;
+                            sound.playKOSound();
+                            this.eliminationRankOrder.unshift(target);
+                        }
+                    }
+                } else {
+                    // 레이스 중: 체력 시스템이 없으므로 잠깐 추진력을 잃고 뒤로 밀려남
+                    target.stunTimer = ITEM_STUN_STEPS;
+                    target.vx -= 4.5;
+                    target.vy += (Math.random() - 0.5) * 4;
+
+                    if (!this.simulating) {
+                        this.damageTexts.push({ x: target.x, y: target.y - 15, text: '🔮 명중!', color: '#a855f7', alpha: 1.0 });
+                        for (let i = 0; i < 12; i++) {
+                            const a = Math.random() * Math.PI * 2;
+                            this.particles.push({
+                                x: target.x - this.cameraX,
+                                y: target.y,
+                                vx: Math.cos(a) * (2 + Math.random() * 4),
+                                vy: Math.sin(a) * (2 + Math.random() * 4),
+                                radius: Math.random() * 3 + 1.5,
+                                color: i % 2 ? '#e9d5ff' : '#a855f7',
+                                alpha: 1.0
+                            });
+                        }
+                    }
+                }
+            }
+
+            // ---------------- 탈락 / 우승 ----------------
+            handleEliminatedSperm(eliminated) {
+                eliminated.deathOrder = ++this.deathCounter;
+
+                // 10% 확률: 황금 정자로 부활 (5초간 톱날·바위 관통 + 속도 1.5배)
+                if (Math.random() < GOLDEN_CHANCE) {
+                    eliminated.isDead = false;
+                    eliminated.goldenTimer = GOLDEN_STEPS;
+                    eliminated.wasGolden = true;
+                    sound.playGoldenSound();
+                    if (!this.simulating) {
+                        for (let i = 0; i < 30; i++) {
+                            const a = Math.random() * Math.PI * 2;
+                            const sp = 1.5 + Math.random() * 5;
+                            this.particles.push({
+                                x: eliminated.x - this.cameraX,
+                                y: eliminated.y,
+                                vx: Math.cos(a) * sp,
+                                vy: Math.sin(a) * sp,
+                                radius: Math.random() * 3 + 2,
+                                color: i % 2 ? '#facc15' : '#fef08a',
+                                alpha: 1.0
+                            });
+                        }
+                    }
+                    this.showEventBanner('🌟', `${eliminated.label} 황금 정자로 부활! (5초간 지형 관통 + 속도 1.5배)`, '황금 정자 탄생!');
+                    return;
+                }
+
+                sound.playSawSplatSound();
+
+                if (!this.simulating) {
+                    for (let i = 0; i < 20; i++) {
+                        this.particles.push({
+                            x: eliminated.x - this.cameraX,
+                            y: eliminated.y,
+                            vx: (Math.random() - 0.5) * 8,
+                            vy: (Math.random() - 0.5) * 8,
+                            radius: Math.random() * 4 + 2,
+                            color: '#ef4444',
+                            alpha: 1.0
+                        });
+                    }
+                }
+
+                // 전원 탈락 방지: 마지막 한 마리는 보호막과 함께 부활
+                const aliveCount = this.participants.filter(p => !p.isDead).length;
+                if (aliveCount === 0) {
+                    eliminated.isDead = false;
+                    eliminated.shieldTimer = 240;
+                    eliminated.vx = 5.0;
+                    eliminated.vy = (Math.random() > 0.5 ? 1 : -1) * (5.5 + Math.random() * 2.5);
+                    eliminated.y += eliminated.vy * 2;
+                    sound.playReviveShieldSound();
+                }
+            }
+
+            onSpermFertilized(winner) {
+                this.isFinished = true;
+                this.isRacing = false;
+
+                sound.playEggPenetrationSound();
+                sound.playVictoryFanfare();
+                if (!this.simulating) this.spawnParticles();
+
+                // 순위: 우승자 → 결투 탈락자(늦게 쓰러진 순) → 생존자(진행도 순) → 톱날 탈락자(늦게 탈락한 순)
+                const ranked = [winner, ...this.eliminationRankOrder];
+                const rest = this.participants.filter(p => !ranked.includes(p));
+                const survivors = rest.filter(p => !p.isDead).sort((a, b) => b.x - a.x);
+                const dead = rest.filter(p => p.isDead).sort((a, b) => b.deathOrder - a.deathOrder);
+                ranked.push(...survivors, ...dead);
+                ranked.forEach((s, i) => { s.rank = i + 1; });
+                this.finalRanking = ranked;
+
+                clearTimeout(this.resultTimer);
+                this.resultTimer = setTimeout(() => this.showResultsModal(), 1000);
+            }
+
+            spawnParticles() {
+                const cx = this.eggX - this.cameraX;
+                const colors = ['#f43f5e', '#f59e0b', '#fef08a', '#38bdf8', '#a78bfa', '#34d399'];
+                for (let i = 0; i < 90; i++) {
+                    const a = Math.random() * Math.PI * 2;
+                    const sp = 2 + Math.random() * 7;
+                    this.particles.push({
+                        x: cx,
+                        y: this.eggY,
+                        vx: Math.cos(a) * sp,
+                        vy: Math.sin(a) * sp,
+                        radius: Math.random() * 4 + 2,
+                        color: colors[i % colors.length],
+                        alpha: 1.0
+                    });
+                }
+            }
+
+            // ---------------- 결과 모달 ----------------
+            showResultsModal() {
+                if (!this.isFinished || this.finalRanking.length === 0) return;
+
+                const winner = this.finalRanking[0];
+                document.getElementById('winner-display-name').textContent = winner.label;
+
+                const loserBox = document.getElementById('loser-card-box');
+                this.showLoser = this.toggleShowLoser.checked;
+                if (this.showLoser) {
+                    const survivors = this.finalRanking.filter(p => p !== winner && !p.isDead);
+                    const loser = survivors.length ? survivors[survivors.length - 1] : null;
+                    document.getElementById('loser-display-name').textContent = loser ? loser.label : '해당 없음';
+                    loserBox.classList.remove('hidden');
+                } else {
+                    loserBox.classList.add('hidden');
+                }
+
+                const medals = ['🥇', '🥈', '🥉'];
+                document.getElementById('result-list').innerHTML = this.finalRanking.map((s, i) => {
+                    const pct = Math.min(99, Math.floor((s.x / this.raceDistance) * 100));
+                    let record;
+                    if (i === 0) record = '🏆 수정 성공';
+                    else if (s.isKO) record = '⚔️ 결투 패배';
+                    else if (s.isDead) record = `🪚 톱날 탈락 · ${pct}%`;
+                    else record = `🐢 난자 미도달 · ${pct}%`;
+                    if (s.wasGolden) record += ' · 🌟 황금 부활';
+                    const numTag = s.label !== `${s.number}번` ? ` <span class="text-slate-500 font-normal">(${s.number}번)</span>` : '';
+                    return `
+                        <div class="flex items-center justify-between px-3 py-1.5 rounded-xl bg-slate-900/70 border border-slate-800 text-xs">
+                            <span class="font-bold text-slate-200"><span class="text-slate-500 mr-2">${medals[i] || (i + 1) + '위'}</span>${esc(s.label)}${numTag}</span>
+                            <span class="text-slate-400">${record}</span>
+                        </div>`;
+                }).join('');
+
+                this.modalResult.classList.remove('opacity-0', 'pointer-events-none', 'scale-95');
+                this.modalResult.classList.add('opacity-100', 'pointer-events-auto', 'scale-100');
+            }
+
+            hideResultsModal() {
+                this.modalResult.classList.add('opacity-0', 'pointer-events-none', 'scale-95');
+                this.modalResult.classList.remove('opacity-100', 'pointer-events-auto', 'scale-100');
+            }
+
+            // ---------------- HUD ----------------
+            updateHud() {
+                let alive = 0, leadX = 0, leader = null;
+                for (const p of this.participants) {
+                    if (p.isDead) continue;
+                    alive++;
+                    if (p.x > leadX) { leadX = p.x; leader = p; }
+                }
+                this.hudAliveCount.textContent = alive;
+
+                const started = this.isRacing || this.isFinished;
+                if (leader && started) {
+                    this.hudLeaderName.textContent = leader.label;
+                    const progress = (this.isBattleArena || this.isFinished)
+                        ? 100 : Math.min(100, Math.floor((leadX / this.raceDistance) * 100));
+                    this.hudProgressBar.style.width = `${progress}%`;
+                    this.hudProgressText.textContent = `${progress}%`;
+                } else if (!started) {
+                    this.hudLeaderName.textContent = '-';
+                    this.hudProgressBar.style.width = '0%';
+                    this.hudProgressText.textContent = '0%';
+                }
+
+                this.btnStart.disabled = this.isRacing;
+                this.btnSkip.disabled = !this.isRacing;
+
+                if (this.isBattleArena) {
+                    const html = this.battleSperms.map(s => `
+                        <div class="flex items-center gap-2 bg-slate-900/80 px-3 py-1 rounded-xl border border-rose-500/30 ${s.hp <= 0 ? 'opacity-40' : ''}">
+                            <span class="w-5 h-5 rounded-full flex items-center justify-center text-xs font-black text-black" style="background-color:${s.color}">${s.number}</span>
+                            <span class="text-xs font-bold text-white">${esc(s.label)}</span>
+                            <div class="w-20 h-2 bg-slate-800 rounded-full overflow-hidden border border-slate-700">
+                                <div class="h-full bg-rose-500" style="width: ${Math.max(0, (s.hp / s.maxHp) * 100).toFixed(0)}%"></div>
+                            </div>
+                        </div>`).join('');
+                    if (html !== this.lastBattleHtml) {
+                        this.battleHpBars.innerHTML = html;
+                        this.lastBattleHtml = html;
+                    }
+                }
+            }
+
+            // ---------------- 렌더링 ----------------
+            render() {
+                const ctx = this.ctx;
+                ctx.setTransform(this.dpr * this.zoom, 0, 0, this.dpr * this.zoom, 0, 0);
+
+                this.drawBackground();
+                this.drawObstaclesAndCurrents();
+                this.drawItems();
+                this.drawEggTarget();
+
+                const gone = this.participants.filter(p => p.isDead || p.isKO);
+                const alive = this.participants.filter(p => !p.isDead && !p.isKO);
+                gone.forEach(p => p.draw(ctx, this.cameraX, this.W));
+                alive.forEach(p => p.draw(ctx, this.cameraX, this.W));
+
+                this.drawProjectiles();
+                this.drawParticles();
+                this.drawDamageTexts();
+            }
+
+            drawItems() {
+                const ctx = this.ctx;
+                this.items.forEach(it => {
+                    if (!it.available) return;
+                    const rx = it.x - this.cameraX;
+                    if (rx < -60 || rx > this.W + 60) return;
+
+                    ctx.save();
+                    ctx.translate(rx, it.y);
+                    const pulse = (14 + Math.sin(this.tick * 0.1 + it.x) * 3) * this.bump;
+
+                    const grad = ctx.createRadialGradient(0, 0, 2, 0, 0, pulse);
+                    grad.addColorStop(0, '#f0abfc');
+                    grad.addColorStop(1, 'rgba(168, 85, 247, 0.1)');
+                    ctx.fillStyle = grad;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, pulse, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    ctx.strokeStyle = 'rgba(192, 132, 252, 0.6)';
+                    ctx.lineWidth = 1.5;
+                    ctx.stroke();
+
+                    ctx.font = `${Math.round(16 * this.bump)}px Pretendard, sans-serif`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText('🔮', 0, 1);
+                    ctx.restore();
+                });
+            }
+
+            drawProjectiles() {
+                const ctx = this.ctx;
+                this.projectiles.forEach(pr => {
+                    const rx = pr.x - this.cameraX;
+                    if (rx < -40 || rx > this.W + 40) return;
+                    ctx.save();
+                    ctx.shadowColor = '#a855f7';
+                    ctx.shadowBlur = 14;
+                    ctx.fillStyle = '#e9d5ff';
+                    ctx.beginPath();
+                    ctx.arc(rx, pr.y, Math.max(3, 5 * this.bump), 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.restore();
+                });
+            }
+
+            drawBackground() {
+                const ctx = this.ctx;
+                const w = this.W, h = this.H;
+
+                ctx.fillStyle = '#030712';
+                ctx.fillRect(0, 0, w, h);
+
+                ctx.save();
+                ctx.strokeStyle = 'rgba(244, 63, 94, 0.05)';
+                ctx.lineWidth = 1;
+                const gridSize = 60;
+                const offsetX = -(((this.cameraX % gridSize) + gridSize) % gridSize);
+                for (let x = offsetX; x < w; x += gridSize) {
+                    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+                }
+                for (let y = 0; y < h; y += gridSize) {
+                    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+                }
+
+                ctx.strokeStyle = 'rgba(244, 63, 94, 0.3)';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.moveTo(0, this.mapBounds.top);    ctx.lineTo(w, this.mapBounds.top);
+                ctx.moveTo(0, this.mapBounds.bottom); ctx.lineTo(w, this.mapBounds.bottom);
+                ctx.stroke();
+
+                // 출발선
+                const startX = 60 - this.cameraX;
+                if (startX > -10 && startX < w) {
+                    ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+                    ctx.setLineDash([10, 8]);
+                    ctx.lineWidth = 2;
+                    ctx.beginPath(); ctx.moveTo(startX, this.mapBounds.top); ctx.lineTo(startX, this.mapBounds.bottom); ctx.stroke();
+                    ctx.setLineDash([]);
+                }
+                ctx.restore();
+            }
+
+            drawObstaclesAndCurrents() {
+                const ctx = this.ctx;
+
+                this.currents.forEach(c => {
+                    const rx = c.x - this.cameraX;
+                    if (rx + c.w < 0 || rx > this.W) return;
+                    ctx.save();
+                    ctx.fillStyle = 'rgba(56, 189, 248, 0.12)';
+                    ctx.strokeStyle = 'rgba(56, 189, 248, 0.4)';
+                    ctx.lineWidth = 1.5;
+                    ctx.fillRect(rx, c.y, c.w, c.h);
+                    ctx.strokeRect(rx, c.y, c.w, c.h);
+                    ctx.fillStyle = '#38bdf8';
+                    ctx.font = `bold ${Math.round(10 * this.bump)}px Pretendard, sans-serif`;
+                    ctx.textAlign = 'center';
+                    ctx.fillText(c.label, rx + c.w / 2, c.y + c.h / 2 + 3);
+                    ctx.restore();
+                });
+
+                this.obstacles.forEach(obs => {
+                    const rx = obs.x - this.cameraX;
+                    const reach = (obs.w || obs.radius * 2 || 0) + 200;
+                    if (rx + reach < 0 || rx - 200 > this.W) return;
+
+                    ctx.save();
+
+                    if (obs.type === 'SAWBLADE') {
+                        ctx.translate(rx, obs.y);
+                        ctx.rotate(obs.rotation);
+                        ctx.fillStyle = '#1e293b';
+                        ctx.strokeStyle = '#ef4444';
+                        ctx.lineWidth = 3;
+                        ctx.beginPath();
+                        const teeth = 10;
+                        for (let i = 0; i < teeth; i++) {
+                            const a = (i / teeth) * Math.PI * 2;
+                            const innerR = obs.radius * 0.65;
+                            const outerR = obs.radius;
+                            const x1 = Math.cos(a) * innerR;
+                            const y1 = Math.sin(a) * innerR;
+                            const x2 = Math.cos(a + 0.2) * outerR;
+                            const y2 = Math.sin(a + 0.2) * outerR;
+                            if (i === 0) ctx.moveTo(x1, y1); else ctx.lineTo(x1, y1);
+                            ctx.lineTo(x2, y2);
+                        }
+                        ctx.closePath();
+                        ctx.fill();
+                        ctx.stroke();
+                        ctx.fillStyle = '#ef4444';
+                        ctx.beginPath();
+                        ctx.arc(0, 0, 5, 0, Math.PI * 2);
+                        ctx.fill();
+
+                    } else if (obs.type === 'BOULDER') {
+                        ctx.translate(rx, obs.y);
+                        const grad = ctx.createRadialGradient(-obs.radius * 0.3, -obs.radius * 0.3, 2, 0, 0, obs.radius);
+                        grad.addColorStop(0, '#475569');
+                        grad.addColorStop(1, '#0f172a');
+                        ctx.fillStyle = grad;
+                        ctx.strokeStyle = '#64748b';
+                        ctx.lineWidth = 2;
+                        ctx.beginPath();
+                        ctx.arc(0, 0, obs.radius, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.stroke();
+
+                    } else if (obs.type === 'SLOW_ZONE') {
+                        ctx.fillStyle = 'rgba(168, 85, 247, 0.25)';
+                        ctx.strokeStyle = 'rgba(168, 85, 247, 0.6)';
+                        ctx.lineWidth = 2;
+                        ctx.fillRect(rx, obs.y, obs.w, obs.h);
+                        ctx.strokeRect(rx, obs.y, obs.w, obs.h);
+                        ctx.fillStyle = '#c084fc';
+                        ctx.font = `900 ${Math.round(11 * this.bump)}px Pretendard, sans-serif`;
+                        ctx.textAlign = 'center';
+                        ctx.fillText('🧪 점액 지대 (-50% 감속)', rx + obs.w / 2, obs.y + obs.h / 2 + 4);
+
+                    } else if (obs.type === 'BOOST_PAD') {
+                        ctx.fillStyle = 'rgba(245, 158, 11, 0.25)';
+                        ctx.strokeStyle = 'rgba(245, 158, 11, 0.7)';
+                        ctx.lineWidth = 2;
+                        ctx.fillRect(rx, obs.y, obs.w, obs.h);
+                        ctx.strokeRect(rx, obs.y, obs.w, obs.h);
+                        ctx.fillStyle = '#fbbf24';
+                        ctx.font = `900 ${Math.round(11 * this.bump)}px Pretendard, sans-serif`;
+                        ctx.textAlign = 'center';
+                        ctx.fillText('⚡ 가속 부스터 존 (+85%)', rx + obs.w / 2, obs.y + obs.h / 2 + 4);
+                    }
+
+                    ctx.restore();
+                });
+            }
+
+            drawEggTarget() {
+                const ctx = this.ctx;
+                const rx = this.eggX - this.cameraX;
+                if (rx < -200 || rx > this.W + 200) return;
+                this.eggPulse += 0.04;
+
+                ctx.save();
+                ctx.translate(rx, this.eggY);
+
+                const pulseR = this.eggRadius + Math.sin(this.eggPulse) * 6;
+
+                const grad = ctx.createRadialGradient(0, 0, 10, 0, 0, pulseR);
+                grad.addColorStop(0, '#fef08a');
+                grad.addColorStop(0.5, '#f43f5e');
+                grad.addColorStop(1, 'rgba(225, 29, 72, 0.2)');
+                ctx.fillStyle = grad;
+                ctx.beginPath();
+                ctx.arc(0, 0, pulseR, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.fillStyle = '#ffffff';
+                ctx.beginPath();
+                ctx.arc(0, 0, pulseR * 0.3, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.fillStyle = '#f43f5e';
+                ctx.font = `900 ${Math.round(13 * this.bump)}px Pretendard, sans-serif`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('난자 (종착지)', 0, 0);
+
+                if (this.isBattleArena && !this.isFinished) {
+                    ctx.strokeStyle = 'rgba(244, 63, 94, 0.55)';
+                    ctx.lineWidth = 2;
+                    ctx.setLineDash([8, 8]);
+                    ctx.beginPath();
+                    ctx.arc(0, 0, this.eggRadius + 85, 0, Math.PI * 2);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                }
+
+                ctx.restore();
+            }
+
+            drawParticles() {
+                const ctx = this.ctx;
+                for (let i = this.particles.length - 1; i >= 0; i--) {
+                    const p = this.particles[i];
+                    p.x += p.vx;
+                    p.y += p.vy;
+                    p.alpha -= 0.03;
+                    if (p.alpha <= 0) { this.particles.splice(i, 1); continue; }
+                    ctx.save();
+                    ctx.globalAlpha = Math.max(0, p.alpha);
+                    ctx.fillStyle = p.color;
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.restore();
+                }
+            }
+
+            drawDamageTexts() {
+                const ctx = this.ctx;
+                for (let i = this.damageTexts.length - 1; i >= 0; i--) {
+                    const dt = this.damageTexts[i];
+                    dt.y -= 0.8;
+                    dt.alpha -= 0.02;
+                    if (dt.alpha <= 0) { this.damageTexts.splice(i, 1); continue; }
+                    ctx.save();
+                    ctx.globalAlpha = dt.alpha;
+                    ctx.fillStyle = dt.color;
+                    ctx.font = `900 ${Math.round(13 * this.bump)}px Pretendard, sans-serif`;
+                    ctx.textAlign = 'center';
+                    ctx.fillText(dt.text, dt.x - this.cameraX, dt.y);
+                    ctx.restore();
+                }
+            }
+
+            // ---------------- 버튼 이벤트 ----------------
+            setSpeed(mult) {
+                this.speed = mult;
+                [1, 2, 4].forEach(m => {
+                    const b = document.getElementById(`btn-speed-${m}`);
+                    b.className = 'px-3 py-1.5 rounded-xl font-black text-xs transition-all ' +
+                        (m === mult ? 'bg-rose-500 text-white' : 'bg-slate-800 hover:bg-slate-700 text-slate-300');
+                });
+            }
+
+            bindEvents() {
+                const $ = (id) => document.getElementById(id);
+
+                // 사운드
+                $('btn-sound-toggle').addEventListener('click', () => {
+                    sound.enabled = !sound.enabled;
+                    if (sound.enabled) sound.init();
+                    $('sound-icon').className = sound.enabled
+                        ? 'fa-solid fa-volume-high text-cyan-400'
+                        : 'fa-solid fa-volume-xmark text-slate-500';
+                    $('sound-text').textContent = sound.enabled ? '사운드 ON' : '사운드 OFF';
+                });
+
+                // 설정 모달
+                $('btn-open-settings').addEventListener('click', () => this.openSettings());
+                $('btn-close-settings').addEventListener('click', () => this.closeSettings());
+
+                // 규칙 설명
+                this.fillRuleValues();
+                $('btn-open-rules').addEventListener('click', () => this.openRules());
+                $('btn-close-rules').addEventListener('click', () => this.closeRules());
+                $('btn-rules-ok').addEventListener('click', () => this.closeRules());
+                this.modalRules.addEventListener('click', (e) => { if (e.target === this.modalRules) this.closeRules(); });
+                document.addEventListener('keydown', (e) => { if (e.key === 'Escape') this.closeRules(); });
+                $('btn-apply-settings').addEventListener('click', () => this.applySettings(true));
+
+                const setN = (v) => {
+                    const n = clamp(parseInt(v, 10) || 20, 2, 100);
+                    this.inputNCount.value = n;
+                };
+                $('btn-n-minus').addEventListener('click', () => setN((parseInt(this.inputNCount.value, 10) || 20) - 1));
+                $('btn-n-plus').addEventListener('click', () => setN((parseInt(this.inputNCount.value, 10) || 20) + 1));
+                this.inputNCount.addEventListener('change', () => setN(this.inputNCount.value));
+                document.querySelectorAll('.btn-preset-n').forEach(btn => {
+                    btn.addEventListener('click', () => setN(btn.dataset.n));
+                });
+                $('btn-clear-names').addEventListener('click', () => { this.inputNames.value = ''; });
+
+                // 배속 / 스킵
+                $('btn-speed-1').addEventListener('click', () => this.setSpeed(1));
+                $('btn-speed-2').addEventListener('click', () => this.setSpeed(2));
+                $('btn-speed-4').addEventListener('click', () => this.setSpeed(4));
+                $('btn-skip-race').addEventListener('click', () => this.skipToResult());
+
+                // 시작 / 재정렬
+                $('btn-start-race').addEventListener('click', () => {
+                    sound.init();
+                    this.startRace();
+                });
+                $('btn-reset-race').addEventListener('click', () => this.resetRace());
+
+                // 결과 모달
+                $('btn-result-rematch').addEventListener('click', () => {
+                    sound.init();
+                    this.startRace();
+                });
+                $('btn-result-close').addEventListener('click', () => this.hideResultsModal());
+            }
+        }
+
+        const game = new SpermRaceGame();
+        window.game = game;
+        game.start();
+    </script>
+</body>
+</html>
